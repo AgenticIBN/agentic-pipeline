@@ -68,10 +68,10 @@ intent_parser_agent = Agent(
 
 if __name__ == "__main__":
     examples = [
-        "Kadıköy bölgesinde coverage'ı artır. RX power en az -95 dBm olsun. Öncelik yüksek. Bu akşam 18:00-23:00 arası.",
-        "Site TR-IST-034 hücresinde kalite kötü, SINR 10 dB üstüne çıksın. Gerekirse tilt 2 derece artır.",
-        "Ankara Çankaya'da yük dengesiz; serve edilen kullanıcı sayısı dengelensin, kritik.",
-        "Beşiktaş'ta hız çok düşük, 5-percentile throughput en az 8 Mbps olsun.",
+        "Improve coverage in Kadıköy area. RX power should be at least -95 dBm. High priority. This evening between 18:00-23:00.",
+        "Quality is poor in site TR-IST-034 cell, SINR should be above 10 dB. Increase tilt by 2 degrees if necessary.",
+        "Load is unbalanced in Ankara Çankaya; balance the number of served users, critical.",
+        "Speed is very low in Beşiktaş, 5-percentile throughput should be at least 8 Mbps.",
     ]
     for q in examples:
         out = intent_parser_agent.run(q)
