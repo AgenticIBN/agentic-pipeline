@@ -5,7 +5,7 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 from agno.agent import Agent
-from agno.models.groq import Groq   
+from agno.models.google import Gemini  
 from dotenv import load_dotenv
 
 load_dotenv()  # .env içindeki GROQ_API_KEY'i ortam değişkeni olarak yükler
@@ -47,10 +47,10 @@ INSTRUCTIONS = [
     "You are an intent parser for a cellular/mobile network optimization system.",
     "Convert the user's natural language request into the provided schema ONLY.",
     "Map KPI mentions using this dictionary:",
-    "- coverage / kapsama / sinyal gücü / rx -> RX_POWER",
-    "- quality / kalite / girişim / sinr -> SINR",
-    "- throughput / tp / hız / 5-percentile / p5 -> THROUGHPUT_5P",
-    "- load / yoğunluk / kullanıcı sayısı / denge -> SERVED_USERS",
+    "- coverage area / coverage / signal strength / rx -> RX_POWER",
+    "- quality / quality / interference / sinr -> SINR",
+    "- throughput / tp / speed / 5-percentile / p5 -> THROUGHPUT_5P",
+    "- load / density / number of users / balance -> SERVED_USERS",
     "If the user asks to 'increase/decrease' without a number, set a DELTA_UP/DOWN with delta=None and keep unit if known.",
     "If the user gives a target like 'SINR >= 10 dB' use op=GTE and value=10 unit='dB'.",
     "If there is no explicit config change, leave configuration_change empty.",
@@ -61,7 +61,7 @@ INSTRUCTIONS = [
 intent_parser_agent = Agent(
     name="Intent Parser",
     description="Parses natural language network intents into structured features for downstream agents.",
-    model=Groq(id="llama-3.3-70b-versatile"),  # ✅ Groq model id (isterseniz değiştirin)
+    model=Gemini(id="gemini-1.5-flash"),  
     output_schema=IntentParse,
     instructions=INSTRUCTIONS,
 )
