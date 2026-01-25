@@ -8,7 +8,7 @@ from agno.agent import Agent
 from agno.models.google import Gemini  
 from dotenv import load_dotenv
 
-load_dotenv()  # .env içindeki GROQ_API_KEY'i ortam değişkeni olarak yükler
+load_dotenv()  # .env içindeki GOOGLE_API_KEY'i ortam değişkeni olarak yükler
 
 # --- 1) Şema: Sonraki agent'ların kullanacağı yapı ---
 
@@ -44,26 +44,61 @@ class IntentParse(BaseModel):
 
 
 INSTRUCTIONS = [
-    "You are an intent parser for a cellular/mobile network optimization system.",
-    "Convert the user's natural language request into the provided schema ONLY.",
-    "Map KPI mentions using this dictionary:",
-    "- coverage area / coverage / signal strength / rx -> RX_POWER",
-    "- quality / quality / interference / sinr -> SINR",
-    "- throughput / tp / speed / 5-percentile / p5 -> THROUGHPUT_5P",
-    "- load / density / number of users / balance -> SERVED_USERS",
-    "If the user asks to 'increase/decrease' without a number, set a DELTA_UP/DOWN with delta=None and keep unit if known.",
-    "If the user gives a target like 'SINR >= 10 dB' use op=GTE and value=10 unit='dB'.",
-    "If there is no explicit config change, leave configuration_change empty.",
-    "Only fill affected_sectors if explicitly stated (e.g., 'sector A', 'cell 3', 'azimuth 120').",
-    "Estimate confidence: 0.9+ when area+KPI+threshold are clear; 0.6-0.8 when one piece is vague; <0.6 when multiple are missing.",
+    "You are an expert intent parser for a cellular/mobile network optimization system.",
+    "Your task: Parse natural language requests into structured JSON following the IntentParse schema.",
+    "",
+    "## KPI Mapping Rules:",
+    "- Coverage/Signal Strength/RX/Reception → RX_POWER",
+    "- Quality/Interference/SINR/Signal Quality → SINR",
+    "- Throughput/Speed/TP/5-percentile/P5 → THROUGHPUT_5P",
+    "- Load/Density/User Count/Balance → SERVED_USERS",
+    "",
+    "## Operator Mapping:",
+    "- 'at least', '>=', 'above or equal' → GTE",
+    "- 'above', '>', 'more than' → GT",
+    "- 'at most', '<=', 'below or equal' → LTE",
+    "- 'below', '<', 'less than' → LT",
+    "- 'between X and Y' → BETWEEN (use value_low and value_high)",
+    "- 'increase by', 'boost by' → DELTA_UP (use delta field)",
+    "- 'decrease by', 'reduce by' → DELTA_DOWN (use delta field)",
+    "- 'target', 'aim for', 'balance', 'optimize' → TARGET",
+    "",
+    "## Configuration Change Parsing:",
+    "- Extract parameter names (e.g., 'tilt', 'azimuth', 'power', 'bandwidth')",
+    "- Identify direction: INCREASE, DECREASE, SET, or OPTIMIZE",
+    "- Extract amount and unit if specified",
+    "- Store full action description in 'action' field",
+    "",
+    "## Priority Inference:",
+    "- CRITICAL: Contains 'critical', 'urgent', 'emergency', or severe issues",
+    "- HIGH: Contains 'high priority', 'important', 'asap'",
+    "- MEDIUM: Default if not specified",
+    "- LOW: Contains 'low priority', 'when possible', 'minor'",
+    "",
+    "## Confidence Scoring:",
+    "- 0.95-1.0: All fields clear (area, KPI, threshold, optional time)",
+    "- 0.85-0.94: Area + KPI + threshold clear, some optional fields missing",
+    "- 0.70-0.84: One key field ambiguous (e.g., vague area or no threshold)",
+    "- 0.50-0.69: Two key fields ambiguous or missing",
+    "- Below 0.50: Multiple critical fields unclear or missing",
+    "",
+    "## Important Rules:",
+    "- Always extract target_area (city, site ID, cell ID, or coordinates)",
+    "- Extract ALL mentioned KPIs into target_kpis array",
+    "- Only populate affected_sectors if explicitly mentioned (e.g., 'sector A', 'cell 3')",
+    "- Leave configuration_change empty if no config action is mentioned",
+    "- Parse time constraints into ISO format or descriptive format",
+    "- Be precise with units (dBm, dB, Mbps, users, degrees, etc.)",
 ]
 
 intent_parser_agent = Agent(
     name="Intent Parser",
     description="Parses natural language network intents into structured features for downstream agents.",
-    model=Gemini(id="gemini-1.5-flash"),  
+    model=Gemini(id="gemini-2.5-flash"),  # Fast and efficient Gemini model
     output_schema=IntentParse,
     instructions=INSTRUCTIONS,
+    markdown=True,  # Better instruction parsing
+    structured_outputs=True,  # Enforce schema compliance
 )
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # .env'den GROQ_API_KEY okur
+load_dotenv()  # .env'den GOOGLE_API_KEY okur
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -19,7 +19,11 @@ class ParseRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "has_groq_key": bool(os.getenv("GROQ_API_KEY"))}
+    return {
+        "ok": True, 
+        "has_google_key": bool(os.getenv("GOOGLE_API_KEY")),
+        "model": "gemini-2.5-flash"
+    }
 
 
 @app.post("/parse")
