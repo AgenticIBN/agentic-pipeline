@@ -1,0 +1,6 @@
+Model,Avg_Latency (s),Avg_Accuracy (vs Gemini),Total_Energy (Joules),Energy_Per_Query (Joules)
+Qwen2.5-0.5B,22.256,0.289,,
+Qwen2.5-1.5B,19.088,0.345,,
+Llama3.2-1B,27.327,0.341,,
+Gemma2-2B,31.147,0.369,,
+Gemini-Flash (Baseline),0.5,1.0,0.0,0.0
