@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import duckdb
@@ -70,13 +71,11 @@ class KpiSnapshot(BaseModel):
 
 class OptimizationPlan(BaseModel):
     selected_config_id: int
-    baseline_config_id: Optional[int] = None
+    current_config_id: Optional[int] = None
     changes: List[ParamChange]
     expected_kpis: KpiSnapshot
-    baseline_kpis: Optional[KpiSnapshot] = None
+    current_kpis: Optional[KpiSnapshot] = None
     constraints_satisfied: bool
-    warnings: List[str] = Field(default_factory=list)
-    rationale: str
 
 
 # -----------------------------
@@ -431,33 +430,29 @@ def optimize_from_intent(intent_json: str) -> str:
     rel = _rel_from_path(data_path)
     sur = _load_surrogate()
 
-    warnings: List[str] = []
-    rationale_parts: List[str] = []
-
     # ----------------------------------------
-    # Baseline row (optional)
+    # Current config row (optional)
     # ----------------------------------------
-    baseline_row = None
-    baseline_cfg = None
-    baseline_kpis = None
+    current_row = None
+    current_cfg = None
+    current_kpis = None
 
     if intent.current_config_id is not None:
         q = f"SELECT * FROM {rel} WHERE config_id = {int(intent.current_config_id)} LIMIT 1"
         df = con.execute(q).df()
         if not df.empty:
-            baseline_row = df.iloc[0].to_dict()
-            baseline_cfg = _config_from_row(baseline_row)
-            # baseline KPIs from dataset actual labels:
-            served = [float(baseline_row[f"tx{i}_served_pct"]) for i in range(4)]
-            imb = _derived_load_imbalance(served, float(baseline_row["K_users"]))
-            baseline_kpis = KpiSnapshot(
-                RX_POWER=float(baseline_row["Prx_p5_dBm"]),
-                SINR=float(baseline_row["SINR_p5_dB"]),
-                THROUGHPUT_5P=float(baseline_row["Thr_p5_Mbps"]),
+            current_row = df.iloc[0].to_dict()
+            current_cfg = _config_from_row(current_row)
+            # current KPIs from dataset actual labels:
+            served = [float(current_row[f"tx{i}_served_pct"]) for i in range(4)]
+            imb = _derived_load_imbalance(served, float(current_row["K_users"]))
+            current_kpis = KpiSnapshot(
+                RX_POWER=float(current_row["Prx_p5_dBm"]),
+                SINR=float(current_row["SINR_p5_dB"]),
+                THROUGHPUT_5P=float(current_row["Thr_p5_Mbps"]),
                 LOAD_IMBALANCE=float(imb),
-                RX_COVERAGE_RATIO=float(baseline_row.get("rx_power_coverage_ratio", np.nan)),
+                RX_COVERAGE_RATIO=float(current_row.get("rx_power_coverage_ratio", np.nan)),
             )
-            warnings.append(f"Baseline config {intent.current_config_id} loaded from dataset.")
 
     # ----------------------------------------
     # Determine threshold context for coverage
@@ -478,7 +473,7 @@ def optimize_from_intent(intent_json: str) -> str:
     seed_limit = int(os.getenv("SEED_LIMIT", "50"))
     seed_rows = _fetch_seed_rows(con, rel, intent, seed_limit)
 
-    if not seed_rows and baseline_cfg is None:
+    if not seed_rows and current_cfg is None:
         # fallback: build a reasonable default from ranges (NOT zeros)
         pr = sur.param_ranges
         mid_p = (pr["power"]["min"] + pr["power"]["max"]) / 2.0
@@ -491,13 +486,12 @@ def optimize_from_intent(intent_json: str) -> str:
             base_cfg[f"tx{i}_dAz"] = mid_az
             base_cfg[f"tx{i}_dEl"] = mid_el
         seed_cfgs = [base_cfg]
-        warnings.append("No seeds found in dataset; using mid-range default configuration.")
     else:
         seed_cfgs = [(_config_from_row(r)) for r in seed_rows]
 
-    # If baseline exists, search starts from baseline first
-    if baseline_cfg is not None:
-        seed_cfgs = [baseline_cfg] + seed_cfgs
+    # If current config exists, search starts from current config first
+    if current_cfg is not None:
+        seed_cfgs = [current_cfg] + seed_cfgs
 
     # ----------------------------------------
     # Online search using surrogate
@@ -543,7 +537,7 @@ def optimize_from_intent(intent_json: str) -> str:
             LOAD_IMBALANCE=imb,
             RX_COVERAGE_RATIO=cov,
         )
-        ok, warn2 = _constraints_ok(intent, snap, baseline_kpis)
+        ok, warn2 = _constraints_ok(intent, snap, current_kpis)
         sc = _score_candidate(intent, snap, intent.kpi_thresholds)
         return snap, sc, ok, warn2
 
@@ -585,35 +579,40 @@ def optimize_from_intent(intent_json: str) -> str:
 
     if best_cfg is None or best_kpis is None:
         # If nothing satisfies constraints, pick the best-scoring regardless
-        warnings.append("No candidate satisfied all constraints; returning best-effort candidate.")
         # fallback: evaluate first seed
         best_cfg = seed_cfgs[0]
         best_kpis, best_score, _, _ = eval_cfg(best_cfg)
 
-    rationale_parts.append("Config generated by surrogate-model-guided search over dataset-informed parameter space.")
-    rationale_parts.append("Seed configurations selected from dataset under matching user_set_id/K_users and available KPI constraints.")
-    rationale_parts.append("KPI prediction uses trained surrogate; throughput computed by Shannon formula with BW=10MHz.")
-
-    # Apply guardrails if baseline exists
-    if baseline_cfg is not None:
-        _apply_guardrails(best_cfg, baseline_cfg, warnings)
+    # Apply guardrails if current config exists
+    if current_cfg is not None:
+        _apply_guardrails(best_cfg, current_cfg, [])
 
     # Build changes list
     changes: List[ParamChange] = []
-    if baseline_cfg is not None:
+    if current_cfg is not None:
+        # With current config: before=current, after=delta (change amount)
         for i in range(4):
             for param_type in ["on", "P_dBm", "dEl", "dAz"]:
                 col = f"tx{i}_{param_type}"
-                before = baseline_cfg[col]
-                after = best_cfg[col]
-                if before != after:
+                before = current_cfg[col]
+                after_val = best_cfg[col]
+                if before != after_val:
                     unit = None
-                    if param_type == "P_dBm":
-                        unit = "dBm"
-                    elif param_type in ("dEl", "dAz"):
-                        unit = "deg"
+                    # For numeric params, 'after' shows the DELTA (change amount)
+                    if param_type in ["P_dBm", "dEl", "dAz"]:
+                        delta = float(after_val) - float(before)
+                        after = delta  # Show change amount (+ for increase, - for decrease)
+                        if param_type == "P_dBm":
+                            unit = "dBm"
+                        else:
+                            unit = "deg"
+                    else:
+                        # For boolean 'on', show new state
+                        after = after_val
+                    
                     changes.append(ParamChange(param=col, before=before, after=after, unit=unit))
     else:
+        # Without current config: before=None, after=new_value
         for i in range(4):
             changes.append(ParamChange(param=f"tx{i}_on", before=None, after=best_cfg[f"tx{i}_on"]))
             changes.append(ParamChange(param=f"tx{i}_P_dBm", before=None, after=best_cfg[f"tx{i}_P_dBm"], unit="dBm"))
@@ -621,22 +620,19 @@ def optimize_from_intent(intent_json: str) -> str:
             changes.append(ParamChange(param=f"tx{i}_dAz", before=None, after=best_cfg[f"tx{i}_dAz"], unit="deg"))
 
     # Final constraint status
-    constraints_ok, warn3 = _constraints_ok(intent, best_kpis, baseline_kpis)
-    for w in warn3:
-        if w not in warnings:
-            warnings.append(w)
+    constraints_ok, _ = _constraints_ok(intent, best_kpis, current_kpis)
 
-    selected_id = int(os.getenv("GENERATED_CONFIG_ID", "999999"))
+    # Generate unique config ID based on timestamp
+    timestamp_id = int(datetime.now().strftime("%Y%m%d%H%M%S"))
+    selected_id = timestamp_id
 
     plan = OptimizationPlan(
         selected_config_id=selected_id,
-        baseline_config_id=intent.current_config_id,
+        current_config_id=intent.current_config_id,
         changes=changes,
         expected_kpis=best_kpis,
-        baseline_kpis=baseline_kpis,
+        current_kpis=current_kpis,
         constraints_satisfied=constraints_ok,
-        warnings=warnings,
-        rationale=" ".join(rationale_parts),
     )
     return plan.model_dump_json(indent=2)
 
