@@ -1,0 +1,133 @@
+{
+  "test_name": "Test 1: RX_POWER Improvement",
+  "passed": true,
+  "input": {
+    "target_area": "Kadıköy",
+    "target_kpis": [
+      "RX_POWER"
+    ],
+    "kpi_thresholds": [
+      {
+        "kpi": "RX_POWER",
+        "op": "GTE",
+        "value": -90.0,
+        "unit": "dBm"
+      }
+    ],
+    "priority": "HIGH",
+    "confidence": 0.9,
+    "user_set_id": 0,
+    "k_users": 800,
+    "current_config": {
+      "tx0_on": true,
+      "tx0_P_dBm": 40.0,
+      "tx0_dAz": -25.0,
+      "tx0_dEl": -3.0,
+      "tx1_on": true,
+      "tx1_P_dBm": 40.0,
+      "tx1_dAz": 25.0,
+      "tx1_dEl": -3.0,
+      "tx2_on": true,
+      "tx2_P_dBm": 40.0,
+      "tx2_dAz": 25.0,
+      "tx2_dEl": -3.0,
+      "tx3_on": true,
+      "tx3_P_dBm": 40.0,
+      "tx3_dAz": -25.0,
+      "tx3_dEl": -3.0
+    }
+  },
+  "output": {
+    "selected_config_id": 20260127011004,
+    "current_config_id": null,
+    "changes": [
+      {
+        "param": "tx0_P_dBm",
+        "before": 40.0,
+        "after": 3.0,
+        "unit": "dBm"
+      },
+      {
+        "param": "tx0_dEl",
+        "before": -3.0,
+        "after": -1.9480433085324211,
+        "unit": "deg"
+      },
+      {
+        "param": "tx0_dAz",
+        "before": -25.0,
+        "after": -1.5520864710354907,
+        "unit": "deg"
+      },
+      {
+        "param": "tx1_P_dBm",
+        "before": 40.0,
+        "after": 3.0,
+        "unit": "dBm"
+      },
+      {
+        "param": "tx1_dEl",
+        "before": -3.0,
+        "after": -2.0,
+        "unit": "deg"
+      },
+      {
+        "param": "tx1_dAz",
+        "before": 25.0,
+        "after": 5.0,
+        "unit": "deg"
+      },
+      {
+        "param": "tx2_P_dBm",
+        "before": 40.0,
+        "after": 3.0,
+        "unit": "dBm"
+      },
+      {
+        "param": "tx2_dEl",
+        "before": -3.0,
+        "after": -2.0,
+        "unit": "deg"
+      },
+      {
+        "param": "tx2_dAz",
+        "before": 25.0,
+        "after": 5.0,
+        "unit": "deg"
+      },
+      {
+        "param": "tx3_P_dBm",
+        "before": 40.0,
+        "after": 3.0,
+        "unit": "dBm"
+      },
+      {
+        "param": "tx3_dEl",
+        "before": -3.0,
+        "after": -2.0,
+        "unit": "deg"
+      },
+      {
+        "param": "tx3_dAz",
+        "before": -25.0,
+        "after": -5.0,
+        "unit": "deg"
+      }
+    ],
+    "expected_kpis": {
+      "RX_POWER": -75.28498199440668,
+      "SINR": -6.065759917085515,
+      "THROUGHPUT_5P": 3.1894018292118753,
+      "LOAD_IMBALANCE": 5.857207467097616,
+      "RX_COVERAGE_RATIO": 0.560450758559967
+    },
+    "current_kpis": {
+      "RX_POWER": -76.43034974167595,
+      "SINR": -4.647163875763716,
+      "THROUGHPUT_5P": 4.254503900240289,
+      "LOAD_IMBALANCE": 5.398173023095403,
+      "RX_COVERAGE_RATIO": 0.4915185918322654
+    },
+    "constraints_satisfied": true
+  }
+}

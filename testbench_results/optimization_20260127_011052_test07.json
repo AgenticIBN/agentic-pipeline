@@ -1,0 +1,67 @@
+{
+  "test_name": "Test 7: Combined RX_POWER + Coverage",
+  "passed": false,
+  "input": {
+    "target_area": "Maltepe",
+    "target_kpis": [
+      "RX_POWER",
+      "RX_COVERAGE_RATIO"
+    ],
+    "kpi_thresholds": [
+      {
+        "kpi": "RX_POWER",
+        "op": "GTE",
+        "value": -88.0,
+        "unit": "dBm"
+      },
+      {
+        "kpi": "RX_COVERAGE_RATIO",
+        "op": "GTE",
+        "value": 0.65,
+        "unit": null
+      }
+    ],
+    "priority": "HIGH",
+    "confidence": 0.87,
+    "user_set_id": 0,
+    "k_users": 800,
+    "current_config": {
+      "tx0_on": true,
+      "tx0_P_dBm": 39.0,
+      "tx0_dAz": -28.0,
+      "tx0_dEl": -5.5,
+      "tx1_on": true,
+      "tx1_P_dBm": 39.0,
+      "tx1_dAz": 28.0,
+      "tx1_dEl": -5.5,
+      "tx2_on": true,
+      "tx2_P_dBm": 39.0,
+      "tx2_dAz": 28.0,
+      "tx2_dEl": -5.5,
+      "tx3_on": true,
+      "tx3_P_dBm": 39.0,
+      "tx3_dAz": -28.0,
+      "tx3_dEl": -5.5
+    }
+  },
+  "output": {
+    "selected_config_id": 20260127011036,
+    "current_config_id": null,
+    "changes": [],
+    "expected_kpis": {
+      "RX_POWER": -75.49708908395631,
+      "SINR": -4.987008008264214,
+      "THROUGHPUT_5P": 3.974472354211941,
+      "LOAD_IMBALANCE": 5.865541438207563,
+      "RX_COVERAGE_RATIO": 0.5455686745570594
+    },
+    "current_kpis": {
+      "RX_POWER": -75.49708908395631,
+      "SINR": -4.987008008264214,
+      "THROUGHPUT_5P": 3.974472354211941,
+      "LOAD_IMBALANCE": 5.865541438207563,
+      "RX_COVERAGE_RATIO": 0.5455686745570594
+    },
+    "constraints_satisfied": false
+  }
+}

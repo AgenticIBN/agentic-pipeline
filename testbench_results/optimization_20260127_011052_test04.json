@@ -1,0 +1,66 @@
+{
+  "test_name": "Test 4: Coverage Ratio Improvement",
+  "passed": false,
+  "input": {
+    "target_area": "Üsküdar",
+    "target_kpis": [
+      "RX_COVERAGE_RATIO"
+    ],
+    "kpi_thresholds": [
+      {
+        "kpi": "RX_COVERAGE_RATIO",
+        "op": "GTE",
+        "value": 0.7,
+        "unit": null
+      },
+      {
+        "kpi": "RX_POWER",
+        "op": "GTE",
+        "value": -95.0,
+        "unit": "dBm"
+      }
+    ],
+    "priority": "HIGH",
+    "confidence": 0.88,
+    "user_set_id": 0,
+    "k_users": 800,
+    "current_config": {
+      "tx0_on": true,
+      "tx0_P_dBm": 38.0,
+      "tx0_dAz": -30.0,
+      "tx0_dEl": -2.0,
+      "tx1_on": false,
+      "tx1_P_dBm": 0.0,
+      "tx1_dAz": 0.0,
+      "tx1_dEl": 0.0,
+      "tx2_on": true,
+      "tx2_P_dBm": 38.0,
+      "tx2_dAz": 30.0,
+      "tx2_dEl": -2.0,
+      "tx3_on": true,
+      "tx3_P_dBm": 38.0,
+      "tx3_dAz": 0.0,
+      "tx3_dEl": -2.0
+    }
+  },
+  "output": {
+    "selected_config_id": 20260127011019,
+    "current_config_id": null,
+    "changes": [],
+    "expected_kpis": {
+      "RX_POWER": -78.36278093348636,
+      "SINR": 0.0992039763242677,
+      "THROUGHPUT_5P": 10.16571518392384,
+      "LOAD_IMBALANCE": 15.58283647208158,
+      "RX_COVERAGE_RATIO": 0.3653083692883497
+    },
+    "current_kpis": {
+      "RX_POWER": -78.36278093348636,
+      "SINR": 0.0992039763242677,
+      "THROUGHPUT_5P": 10.16571518392384,
+      "LOAD_IMBALANCE": 15.58283647208158,
+      "RX_COVERAGE_RATIO": 0.3653083692883497
+    },
+    "constraints_satisfied": false
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "test_name": "Test 9: Power Efficiency",
+  "passed": false,
+  "input": {
+    "target_area": "Ataşehir",
+    "target_kpis": [
+      "SINR",
+      "RX_POWER"
+    ],
+    "kpi_thresholds": [
+      {
+        "kpi": "SINR",
+        "op": "GTE",
+        "value": -4.0,
+        "unit": "dB"
+      },
+      {
+        "kpi": "RX_POWER",
+        "op": "GTE",
+        "value": -89.0,
+        "unit": "dBm"
+      }
+    ],
+    "priority": "MEDIUM",
+    "confidence": 0.78,
+    "user_set_id": 0,
+    "k_users": 800,
+    "current_config": {
+      "tx0_on": true,
+      "tx0_P_dBm": 46.0,
+      "tx0_dAz": -10.0,
+      "tx0_dEl": -3.5,
+      "tx1_on": true,
+      "tx1_P_dBm": 46.0,
+      "tx1_dAz": 10.0,
+      "tx1_dEl": -3.5,
+      "tx2_on": true,
+      "tx2_P_dBm": 46.0,
+      "tx2_dAz": 10.0,
+      "tx2_dEl": -3.5,
+      "tx3_on": true,
+      "tx3_P_dBm": 46.0,
+      "tx3_dAz": -10.0,
+      "tx3_dEl": -3.5
+    }
+  },
+  "output": {
+    "selected_config_id": 20260127011046,
+    "current_config_id": null,
+    "changes": [],
+    "expected_kpis": {
+      "RX_POWER": -76.05326448632682,
+      "SINR": -5.497930672152659,
+      "THROUGHPUT_5P": 3.583654445947756,
+      "LOAD_IMBALANCE": 2.3223767052351048,
+      "RX_COVERAGE_RATIO": 0.5264206869628135
+    },
+    "current_kpis": {
+      "RX_POWER": -76.05326448632682,
+      "SINR": -5.497930672152659,
+      "THROUGHPUT_5P": 3.583654445947756,
+      "LOAD_IMBALANCE": 2.3223767052351048,
+      "RX_COVERAGE_RATIO": 0.5264206869628135
+    },
+    "constraints_satisfied": false
+  }
+}

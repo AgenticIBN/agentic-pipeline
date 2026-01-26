@@ -10,27 +10,28 @@ from pathlib import Path
 
 def save_optimization_result(input_data, output_data, output_dir="results"):
     """
-    Save optimization result to JSONL file with timestamp and metadata.
-    Each line is a complete JSON object for easy append and analysis.
+    Save optimization result as individual JSON file with unique timestamp ID.
     """
     # Create output directory if not exists
     Path(output_dir).mkdir(exist_ok=True)
     
-    # JSONL file path (all results in one file)
-    jsonl_path = os.path.join(output_dir, "optimization_results.jsonl")
+    # Generate unique ID from timestamp
+    unique_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    json_path = os.path.join(output_dir, f"optimization_{unique_id}.json")
     
     # Create record with metadata
     record = {
+        "id": unique_id,
         "timestamp": datetime.now().isoformat(),
         "input": input_data,
         "output": output_data
     }
     
-    # Append to JSONL file (one JSON per line)
-    with open(jsonl_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    # Save as pretty-printed JSON
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
     
-    return jsonl_path
+    return json_path
 
 # Test Case: Simple Coverage Improvement
 test_input = {

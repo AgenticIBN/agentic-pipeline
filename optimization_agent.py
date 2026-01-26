@@ -47,6 +47,7 @@ class IntentParse(BaseModel):
     confidence: float = Field(..., ge=0, le=1)
 
     current_config_id: Optional[int] = None
+    current_config: Optional[Dict[str, Any]] = None  # Direct config dict (alternative to config_id)
     user_set_id: Optional[int] = None
     k_users: Optional[int] = None
 
@@ -431,13 +432,35 @@ def optimize_from_intent(intent_json: str) -> str:
     sur = _load_surrogate()
 
     # ----------------------------------------
-    # Current config row (optional)
+    # Current config (from dict or dataset)
     # ----------------------------------------
     current_row = None
     current_cfg = None
     current_kpis = None
 
-    if intent.current_config_id is not None:
+    # Option 1: Current config provided directly as dict
+    if intent.current_config is not None:
+        current_cfg = dict(intent.current_config)
+        # Compute current KPIs using surrogate
+        context_temp = {
+            "user_set_id": int(intent.user_set_id or 0),
+            "K_users": int(intent.k_users or 0),
+            "rx_power_thr_dBm": -95.0,  # default
+            "total_tx_power_watt": 0.0,
+        }
+        preds = sur.predict(current_cfg, context_temp)
+        served = [float(preds[f"tx{i}_served_pct"]) for i in range(4)]
+        imb = _derived_load_imbalance(served, float(context_temp["K_users"]))
+        thr_mbps = sur.throughput_from_sinr(float(preds["SINR_p5_dB"]))
+        current_kpis = KpiSnapshot(
+            RX_POWER=float(preds["Prx_p5_dBm"]),
+            SINR=float(preds["SINR_p5_dB"]),
+            THROUGHPUT_5P=thr_mbps,
+            LOAD_IMBALANCE=float(imb),
+            RX_COVERAGE_RATIO=float(preds["rx_power_coverage_ratio"]),
+        )
+    # Option 2: Fetch from dataset by config_id
+    elif intent.current_config_id is not None:
         q = f"SELECT * FROM {rel} WHERE config_id = {int(intent.current_config_id)} LIMIT 1"
         df = con.execute(q).df()
         if not df.empty:
