@@ -1,0 +1,371 @@
+{
+  "scenario": {
+    "name": "Scenario 1: New CRITICAL Intent vs Active LOW Intent",
+    "description": "System has LOW priority intent running. CRITICAL intent arrives.",
+    "active_intents": [
+      {
+        "intent": {
+          "target_area": "Kad\u0131k\u00f6y",
+          "target_kpis": [
+            "RX_POWER"
+          ],
+          "kpi_thresholds": [],
+          "time_constraint_start": null,
+          "time_constraint_end": null,
+          "priority": "LOW",
+          "configuration_change": [],
+          "affected_sectors": [],
+          "confidence": 0.85,
+          "current_config_id": null,
+          "current_config": null,
+          "user_set_id": null,
+          "k_users": null
+        },
+        "plan": {
+          "selected_config_id": 12345,
+          "current_config_id": 0,
+          "changes": [
+            {
+              "param": "tx0_P_dBm",
+              "before": 40.0,
+              "after": 3.0,
+              "unit": "dBm"
+            },
+            {
+              "param": "tx1_dAz",
+              "before": 0.0,
+              "after": -5.0,
+              "unit": "deg"
+            }
+          ],
+          "expected_kpis": {
+            "RX_POWER": -82.0,
+            "SINR": 8.0,
+            "THROUGHPUT_5P": 20.0,
+            "LOAD_IMBALANCE": 5.0,
+            "RX_COVERAGE_RATIO": 0.75
+          },
+          "current_kpis": null,
+          "constraints_satisfied": true
+        }
+      }
+    ],
+    "new_intent": {
+      "target_area": "Kad\u0131k\u00f6y",
+      "target_kpis": [
+        "RX_POWER",
+        "SINR"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "RX_POWER",
+          "op": "GTE",
+          "value": -85.0,
+          "unit": "dBm"
+        },
+        {
+          "kpi": "SINR",
+          "op": "GTE",
+          "value": 10.0,
+          "unit": "dB"
+        }
+      ],
+      "priority": "CRITICAL",
+      "confidence": 0.95,
+      "user_set_id": 0,
+      "k_users": 800,
+      "current_config": {
+        "tx0_on": true,
+        "tx0_P_dBm": 42.0,
+        "tx0_dAz": -15.0,
+        "tx0_dEl": -4.0,
+        "tx1_on": true,
+        "tx1_P_dBm": 42.0,
+        "tx1_dAz": 15.0,
+        "tx1_dEl": -4.0,
+        "tx2_on": true,
+        "tx2_P_dBm": 42.0,
+        "tx2_dAz": 15.0,
+        "tx2_dEl": -4.0,
+        "tx3_on": true,
+        "tx3_P_dBm": 42.0,
+        "tx3_dAz": -15.0,
+        "tx3_dEl": -4.0
+      }
+    },
+    "expected": "CRITICAL should dominate. Conflict resolution should favor new intent."
+  },
+  "result": {
+    "orchestration_id": "orch_20260129233106",
+    "total_intents": 2,
+    "successful_optimizations": 1,
+    "failed_optimizations": 0,
+    "optimization_results": [
+      {
+        "intent_id": "new_intent_CRITICAL",
+        "intent": {
+          "target_area": "Kad\u0131k\u00f6y",
+          "target_kpis": [
+            "RX_POWER",
+            "SINR"
+          ],
+          "kpi_thresholds": [
+            {
+              "kpi": "RX_POWER",
+              "op": "GTE",
+              "value": -85.0,
+              "value_low": null,
+              "value_high": null,
+              "delta": null,
+              "unit": "dBm"
+            },
+            {
+              "kpi": "SINR",
+              "op": "GTE",
+              "value": 10.0,
+              "value_low": null,
+              "value_high": null,
+              "delta": null,
+              "unit": "dB"
+            }
+          ],
+          "time_constraint_start": null,
+          "time_constraint_end": null,
+          "priority": "CRITICAL",
+          "configuration_change": [],
+          "affected_sectors": [],
+          "confidence": 0.95,
+          "current_config_id": null,
+          "current_config": {
+            "tx0_on": true,
+            "tx0_P_dBm": 42.0,
+            "tx0_dAz": -15.0,
+            "tx0_dEl": -4.0,
+            "tx1_on": true,
+            "tx1_P_dBm": 42.0,
+            "tx1_dAz": 15.0,
+            "tx1_dEl": -4.0,
+            "tx2_on": true,
+            "tx2_P_dBm": 42.0,
+            "tx2_dAz": 15.0,
+            "tx2_dEl": -4.0,
+            "tx3_on": true,
+            "tx3_P_dBm": 42.0,
+            "tx3_dAz": -15.0,
+            "tx3_dEl": -4.0
+          },
+          "user_set_id": 0,
+          "k_users": 800
+        },
+        "optimization_plan": {
+          "selected_config_id": 20260129233112,
+          "current_config_id": null,
+          "changes": [],
+          "expected_kpis": {
+            "RX_POWER": -76.02889026845365,
+            "SINR": -5.005533458876735,
+            "THROUGHPUT_5P": 3.9596774761319855,
+            "LOAD_IMBALANCE": 3.3185347684978335,
+            "RX_COVERAGE_RATIO": 0.5236915033273777
+          },
+          "current_kpis": {
+            "RX_POWER": -76.02889026845365,
+            "SINR": -5.005533458876735,
+            "THROUGHPUT_5P": 3.9596774761319855,
+            "LOAD_IMBALANCE": 3.3185347684978335,
+            "RX_COVERAGE_RATIO": 0.5236915033273777
+          },
+          "constraints_satisfied": false
+        },
+        "success": true,
+        "error_message": ""
+      }
+    ],
+    "conflict_detected": true,
+    "conflict_report": {
+      "conflict_report": {
+        "is_conflicted": true,
+        "conflict_summary": "Detected 1 conflicts. Max severity: LOW. Base station-level analysis.",
+        "details": [
+          {
+            "conflict_type": "SPATIAL_OVERLAP",
+            "severity": "LOW",
+            "conflicting_param": null,
+            "conflicting_base_station": null,
+            "description": "Intents modify different base stations. New: [], Active: ['tx0', 'tx1']. Target areas: Kad\u0131k\u00f6y vs Kad\u0131k\u00f6y",
+            "conflicting_intent_id": "12345"
+          }
+        ],
+        "resolution_recommendation": "LOW conflicts detected. Consider coordination but parallel execution may be safe."
+      },
+      "proposals": [
+        {
+          "agent_id": "new_intent_agent",
+          "intent": {
+            "target_area": "Kad\u0131k\u00f6y",
+            "target_kpis": [
+              "RX_POWER",
+              "SINR"
+            ],
+            "kpi_thresholds": [
+              {
+                "kpi": "RX_POWER",
+                "op": "GTE",
+                "value": -85.0,
+                "value_low": null,
+                "value_high": null,
+                "delta": null,
+                "unit": "dBm"
+              },
+              {
+                "kpi": "SINR",
+                "op": "GTE",
+                "value": 10.0,
+                "value_low": null,
+                "value_high": null,
+                "delta": null,
+                "unit": "dB"
+              }
+            ],
+            "time_constraint_start": null,
+            "time_constraint_end": null,
+            "priority": "CRITICAL",
+            "configuration_change": [],
+            "affected_sectors": [],
+            "confidence": 0.95,
+            "current_config_id": null,
+            "current_config": {
+              "tx0_on": true,
+              "tx0_P_dBm": 42.0,
+              "tx0_dAz": -15.0,
+              "tx0_dEl": -4.0,
+              "tx1_on": true,
+              "tx1_P_dBm": 42.0,
+              "tx1_dAz": 15.0,
+              "tx1_dEl": -4.0,
+              "tx2_on": true,
+              "tx2_P_dBm": 42.0,
+              "tx2_dAz": 15.0,
+              "tx2_dEl": -4.0,
+              "tx3_on": true,
+              "tx3_P_dBm": 42.0,
+              "tx3_dAz": -15.0,
+              "tx3_dEl": -4.0
+            },
+            "user_set_id": 0,
+            "k_users": 800
+          },
+          "plan": {
+            "selected_config_id": 20260129233112,
+            "current_config_id": null,
+            "changes": [],
+            "expected_kpis": {
+              "RX_POWER": -76.02889026845365,
+              "SINR": -5.005533458876735,
+              "THROUGHPUT_5P": 3.9596774761319855,
+              "LOAD_IMBALANCE": 3.3185347684978335,
+              "RX_COVERAGE_RATIO": 0.5236915033273777
+            },
+            "current_kpis": {
+              "RX_POWER": -76.02889026845365,
+              "SINR": -5.005533458876735,
+              "THROUGHPUT_5P": 3.9596774761319855,
+              "LOAD_IMBALANCE": 3.3185347684978335,
+              "RX_COVERAGE_RATIO": 0.5236915033273777
+            },
+            "constraints_satisfied": false
+          }
+        },
+        {
+          "agent_id": "active_intent_0_12345",
+          "intent": {
+            "target_area": "Kad\u0131k\u00f6y",
+            "target_kpis": [
+              "RX_POWER"
+            ],
+            "kpi_thresholds": [],
+            "time_constraint_start": null,
+            "time_constraint_end": null,
+            "priority": "LOW",
+            "configuration_change": [],
+            "affected_sectors": [],
+            "confidence": 0.85,
+            "current_config_id": null,
+            "current_config": null,
+            "user_set_id": null,
+            "k_users": null
+          },
+          "plan": {
+            "selected_config_id": 12345,
+            "current_config_id": 0,
+            "changes": [
+              {
+                "param": "tx0_P_dBm",
+                "before": 40.0,
+                "after": 3.0,
+                "unit": "dBm"
+              },
+              {
+                "param": "tx1_dAz",
+                "before": 0.0,
+                "after": -5.0,
+                "unit": "deg"
+              }
+            ],
+            "expected_kpis": {
+              "RX_POWER": -82.0,
+              "SINR": 8.0,
+              "THROUGHPUT_5P": 20.0,
+              "LOAD_IMBALANCE": 5.0,
+              "RX_COVERAGE_RATIO": 0.75
+            },
+            "current_kpis": null,
+            "constraints_satisfied": true
+          }
+        }
+      ],
+      "current_config_id": null
+    },
+    "resolution_applied": true,
+    "final_configuration": {
+      "merged_config_id": "merged_20260129233112",
+      "contributing_intents": [
+        "new_intent_agent",
+        "active_intent_0_12345"
+      ],
+      "priority_weights": {
+        "new_intent_agent": 1.616580310880829,
+        "active_intent_0_12345": 0.38341968911917096
+      },
+      "changes": [
+        {
+          "param": "tx0_P_dBm",
+          "before": 40.0,
+          "after": 3.0,
+          "unit": "dBm"
+        },
+        {
+          "param": "tx1_dAz",
+          "before": 0.0,
+          "after": -5.0,
+          "unit": "deg"
+        }
+      ],
+      "expected_kpis": {
+        "RX_POWER": -77.17361078693662,
+        "SINR": -2.512244661060987,
+        "THROUGHPUT_5P": 7.03476521386834,
+        "LOAD_IMBALANCE": 3.640888206661461,
+        "RX_COVERAGE_RATIO": 0.5670770700469996
+      },
+      "resolution_strategy": "WEIGHTED_MERGE",
+      "conflict_summary": "Detected 1 conflicts. Max severity: LOW. Base station-level analysis.",
+      "constraints_satisfied": false
+    },
+    "execution_strategy": "MERGED",
+    "notes": [
+      "Conflicts resolved using WEIGHTED_MERGE strategy",
+      "Merged 2 intents into single configuration"
+    ]
+  }
+}

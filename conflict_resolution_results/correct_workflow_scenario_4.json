@@ -1,0 +1,326 @@
+{
+  "scenario": {
+    "name": "Scenario 4: New Intent - Different Area (No Conflict)",
+    "description": "Active intent in Kad\u0131k\u00f6y. New intent in \u00dcmraniye (different area).",
+    "active_intents": [
+      {
+        "intent": {
+          "target_area": "Kad\u0131k\u00f6y",
+          "target_kpis": [
+            "RX_POWER"
+          ],
+          "kpi_thresholds": [],
+          "time_constraint_start": null,
+          "time_constraint_end": null,
+          "priority": "HIGH",
+          "configuration_change": [],
+          "affected_sectors": [],
+          "confidence": 0.85,
+          "current_config_id": null,
+          "current_config": null,
+          "user_set_id": null,
+          "k_users": null
+        },
+        "plan": {
+          "selected_config_id": 12345,
+          "current_config_id": 0,
+          "changes": [
+            {
+              "param": "tx0_P_dBm",
+              "before": 40.0,
+              "after": 4.0,
+              "unit": "dBm"
+            }
+          ],
+          "expected_kpis": {
+            "RX_POWER": -82.0,
+            "SINR": 8.0,
+            "THROUGHPUT_5P": 20.0,
+            "LOAD_IMBALANCE": 5.0,
+            "RX_COVERAGE_RATIO": 0.75
+          },
+          "current_kpis": null,
+          "constraints_satisfied": true
+        }
+      }
+    ],
+    "new_intent": {
+      "target_area": "\u00dcmraniye",
+      "target_kpis": [
+        "SINR"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "SINR",
+          "op": "GTE",
+          "value": 8.0,
+          "unit": "dB"
+        }
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.85,
+      "user_set_id": 0,
+      "k_users": 800,
+      "current_config": {
+        "tx0_on": true,
+        "tx0_P_dBm": 43.0,
+        "tx0_dAz": 0.0,
+        "tx0_dEl": -3.0,
+        "tx1_on": true,
+        "tx1_P_dBm": 43.0,
+        "tx1_dAz": 0.0,
+        "tx1_dEl": -3.0,
+        "tx2_on": true,
+        "tx2_P_dBm": 43.0,
+        "tx2_dAz": 0.0,
+        "tx2_dEl": -3.0,
+        "tx3_on": true,
+        "tx3_P_dBm": 43.0,
+        "tx3_dAz": 0.0,
+        "tx3_dEl": -3.0
+      }
+    },
+    "expected": "No/Low conflict. Both should run in parallel."
+  },
+  "result": {
+    "orchestration_id": "orch_20260129233122",
+    "total_intents": 2,
+    "successful_optimizations": 1,
+    "failed_optimizations": 0,
+    "optimization_results": [
+      {
+        "intent_id": "new_intent_MEDIUM",
+        "intent": {
+          "target_area": "\u00dcmraniye",
+          "target_kpis": [
+            "SINR"
+          ],
+          "kpi_thresholds": [
+            {
+              "kpi": "SINR",
+              "op": "GTE",
+              "value": 8.0,
+              "value_low": null,
+              "value_high": null,
+              "delta": null,
+              "unit": "dB"
+            }
+          ],
+          "time_constraint_start": null,
+          "time_constraint_end": null,
+          "priority": "MEDIUM",
+          "configuration_change": [],
+          "affected_sectors": [],
+          "confidence": 0.85,
+          "current_config_id": null,
+          "current_config": {
+            "tx0_on": true,
+            "tx0_P_dBm": 43.0,
+            "tx0_dAz": 0.0,
+            "tx0_dEl": -3.0,
+            "tx1_on": true,
+            "tx1_P_dBm": 43.0,
+            "tx1_dAz": 0.0,
+            "tx1_dEl": -3.0,
+            "tx2_on": true,
+            "tx2_P_dBm": 43.0,
+            "tx2_dAz": 0.0,
+            "tx2_dEl": -3.0,
+            "tx3_on": true,
+            "tx3_P_dBm": 43.0,
+            "tx3_dAz": 0.0,
+            "tx3_dEl": -3.0
+          },
+          "user_set_id": 0,
+          "k_users": 800
+        },
+        "optimization_plan": {
+          "selected_config_id": 20260129233127,
+          "current_config_id": null,
+          "changes": [],
+          "expected_kpis": {
+            "RX_POWER": -76.49225819220857,
+            "SINR": -4.753452209149533,
+            "THROUGHPUT_5P": 4.165147269010054,
+            "LOAD_IMBALANCE": 0.49821974553963105,
+            "RX_COVERAGE_RATIO": 0.50732453341018
+          },
+          "current_kpis": {
+            "RX_POWER": -76.49225819220857,
+            "SINR": -4.753452209149533,
+            "THROUGHPUT_5P": 4.165147269010054,
+            "LOAD_IMBALANCE": 0.49821974553963105,
+            "RX_COVERAGE_RATIO": 0.50732453341018
+          },
+          "constraints_satisfied": false
+        },
+        "success": true,
+        "error_message": ""
+      }
+    ],
+    "conflict_detected": true,
+    "conflict_report": {
+      "conflict_report": {
+        "is_conflicted": true,
+        "conflict_summary": "Detected 1 conflicts. Max severity: LOW. Base station-level analysis.",
+        "details": [
+          {
+            "conflict_type": "SPATIAL_OVERLAP",
+            "severity": "LOW",
+            "conflicting_param": null,
+            "conflicting_base_station": null,
+            "description": "Intents modify different base stations. New: [], Active: ['tx0']. Target areas: \u00dcmraniye vs Kad\u0131k\u00f6y",
+            "conflicting_intent_id": "12345"
+          }
+        ],
+        "resolution_recommendation": "LOW conflicts detected. Consider coordination but parallel execution may be safe."
+      },
+      "proposals": [
+        {
+          "agent_id": "new_intent_agent",
+          "intent": {
+            "target_area": "\u00dcmraniye",
+            "target_kpis": [
+              "SINR"
+            ],
+            "kpi_thresholds": [
+              {
+                "kpi": "SINR",
+                "op": "GTE",
+                "value": 8.0,
+                "value_low": null,
+                "value_high": null,
+                "delta": null,
+                "unit": "dB"
+              }
+            ],
+            "time_constraint_start": null,
+            "time_constraint_end": null,
+            "priority": "MEDIUM",
+            "configuration_change": [],
+            "affected_sectors": [],
+            "confidence": 0.85,
+            "current_config_id": null,
+            "current_config": {
+              "tx0_on": true,
+              "tx0_P_dBm": 43.0,
+              "tx0_dAz": 0.0,
+              "tx0_dEl": -3.0,
+              "tx1_on": true,
+              "tx1_P_dBm": 43.0,
+              "tx1_dAz": 0.0,
+              "tx1_dEl": -3.0,
+              "tx2_on": true,
+              "tx2_P_dBm": 43.0,
+              "tx2_dAz": 0.0,
+              "tx2_dEl": -3.0,
+              "tx3_on": true,
+              "tx3_P_dBm": 43.0,
+              "tx3_dAz": 0.0,
+              "tx3_dEl": -3.0
+            },
+            "user_set_id": 0,
+            "k_users": 800
+          },
+          "plan": {
+            "selected_config_id": 20260129233127,
+            "current_config_id": null,
+            "changes": [],
+            "expected_kpis": {
+              "RX_POWER": -76.49225819220857,
+              "SINR": -4.753452209149533,
+              "THROUGHPUT_5P": 4.165147269010054,
+              "LOAD_IMBALANCE": 0.49821974553963105,
+              "RX_COVERAGE_RATIO": 0.50732453341018
+            },
+            "current_kpis": {
+              "RX_POWER": -76.49225819220857,
+              "SINR": -4.753452209149533,
+              "THROUGHPUT_5P": 4.165147269010054,
+              "LOAD_IMBALANCE": 0.49821974553963105,
+              "RX_COVERAGE_RATIO": 0.50732453341018
+            },
+            "constraints_satisfied": false
+          }
+        },
+        {
+          "agent_id": "active_intent_0_12345",
+          "intent": {
+            "target_area": "Kad\u0131k\u00f6y",
+            "target_kpis": [
+              "RX_POWER"
+            ],
+            "kpi_thresholds": [],
+            "time_constraint_start": null,
+            "time_constraint_end": null,
+            "priority": "HIGH",
+            "configuration_change": [],
+            "affected_sectors": [],
+            "confidence": 0.85,
+            "current_config_id": null,
+            "current_config": null,
+            "user_set_id": null,
+            "k_users": null
+          },
+          "plan": {
+            "selected_config_id": 12345,
+            "current_config_id": 0,
+            "changes": [
+              {
+                "param": "tx0_P_dBm",
+                "before": 40.0,
+                "after": 4.0,
+                "unit": "dBm"
+              }
+            ],
+            "expected_kpis": {
+              "RX_POWER": -82.0,
+              "SINR": 8.0,
+              "THROUGHPUT_5P": 20.0,
+              "LOAD_IMBALANCE": 5.0,
+              "RX_COVERAGE_RATIO": 0.75
+            },
+            "current_kpis": null,
+            "constraints_satisfied": true
+          }
+        }
+      ],
+      "current_config_id": null
+    },
+    "resolution_applied": true,
+    "final_configuration": {
+      "merged_config_id": "merged_20260129233127",
+      "contributing_intents": [
+        "new_intent_agent",
+        "active_intent_0_12345"
+      ],
+      "priority_weights": {
+        "new_intent_agent": 0.8,
+        "active_intent_0_12345": 1.2000000000000002
+      },
+      "changes": [
+        {
+          "param": "tx0_P_dBm",
+          "before": 40.0,
+          "after": 4.0,
+          "unit": "dBm"
+        }
+      ],
+      "expected_kpis": {
+        "RX_POWER": -79.79690327688344,
+        "SINR": 2.8986191163401873,
+        "THROUGHPUT_5P": 13.666058907604024,
+        "LOAD_IMBALANCE": 3.199287898215853,
+        "RX_COVERAGE_RATIO": 0.6529298133640721
+      },
+      "resolution_strategy": "WEIGHTED_MERGE",
+      "conflict_summary": "Detected 1 conflicts. Max severity: LOW. Base station-level analysis.",
+      "constraints_satisfied": true
+    },
+    "execution_strategy": "MERGED",
+    "notes": [
+      "Conflicts resolved using WEIGHTED_MERGE strategy",
+      "Merged 2 intents into single configuration"
+    ]
+  }
+}
