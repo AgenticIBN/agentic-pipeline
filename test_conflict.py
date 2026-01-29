@@ -1,211 +1,148 @@
+#!/usr/bin/env python3
+"""
+Test Base Station Level Conflict Detection
+Compares OLD (target_area based) vs NEW (base station based) approaches
+"""
 import json
-import sys
-import os
-from datetime import datetime
+from conflict_detector_agent import detect_conflicts
+from optimization_agent import OptimizationPlan, ParamChange, IntentParse
 
-# Dosya yapısı gereği importları yapıyoruz
-try:
-    from conflict_detector_agent import detect_conflicts
-    # optimization_agent.py dosyasındaki modelleri kullanıyoruz
-except ImportError as e:
-    print("ERROR: 'conflict_detector_agent.py' not found.")
-    sys.exit(1)
+def create_test_intent(area: str, bs_changes: dict) -> tuple[IntentParse, OptimizationPlan]:
+    """Helper to create intent and plan"""
+    intent = IntentParse(
+        target_area=area,
+        target_kpis=["RX_POWER"],
+        priority="HIGH",
+        confidence=0.9
+    )
+    
+    changes = [
+        ParamChange(param=param, before=0, after=value)
+        for param, value in bs_changes.items()
+    ]
+    
+    plan = OptimizationPlan(
+        selected_config_id=1,
+        current_config_id=0,
+        changes=changes,
+        expected_kpis={"RX_POWER": -85.0},
+        constraints_satisfied=True
+    )
+    
+    return intent, plan
 
-def print_separator(title):
-    print("\n" + "="*60)
-    print(f"TEST SCENARIO: {title}")
-    print("="*60)
+# Test Cases
+test_cases = [
+    {
+        "name": "Test 1: Different Areas, Different Base Stations",
+        "new": ("Kadıköy", {"tx0_P_dBm": 5.0, "tx1_dAz": -10.0}),
+        "active": [("Pendik", {"tx2_P_dBm": 3.0, "tx3_on": True})],
+        "expected_severity": "LOW",
+        "expected_conflicts": True,  # Minimal conflict
+        "explanation": "Farklı BS'ler, minimal koordinasyon gerekli"
+    },
+    {
+        "name": "Test 2: Different Areas, Same BS, Different Params",
+        "new": ("Kadıköy", {"tx0_P_dBm": 5.0}),
+        "active": [("Pendik", {"tx0_dAz": -10.0})],
+        "expected_severity": "LOW-MEDIUM",
+        "expected_conflicts": True,
+        "explanation": "Aynı BS (tx0) ama farklı parametreler"
+    },
+    {
+        "name": "Test 3: Different Areas, Same BS+Param, Opposite Direction",
+        "new": ("Kadıköy", {"tx0_P_dBm": 5.0}),
+        "active": [("Pendik", {"tx0_P_dBm": -3.0})],
+        "expected_severity": "HIGH",
+        "expected_conflicts": True,
+        "explanation": "Aynı BS, aynı param, zıt yön - Same area olsaydı CRITICAL"
+    },
+    {
+        "name": "Test 4: Same Area, Same BS+Param, Opposite Direction",
+        "new": ("Kadıköy", {"tx0_P_dBm": 5.0}),
+        "active": [("Kadıköy", {"tx0_P_dBm": -3.0})],
+        "expected_severity": "CRITICAL",
+        "expected_conflicts": True,
+        "explanation": "CRITICAL conflict - Severity boost from same area"
+    },
+    {
+        "name": "Test 5: Same Area, Same BS+Param, Same Direction",
+        "new": ("Kadıköy", {"tx0_P_dBm": 5.0}),
+        "active": [("Kadıköy", {"tx0_P_dBm": 3.0})],
+        "expected_severity": "HIGH",
+        "expected_conflicts": True,
+        "explanation": "Over-saturation risk with severity boost"
+    },
+    {
+        "name": "Test 6: Multiple Active Intents with Complex Conflicts",
+        "new": ("Kadıköy", {"tx0_P_dBm": 5.0, "tx1_dAz": -10.0, "tx2_on": True}),
+        "active": [
+            ("Pendik", {"tx0_P_dBm": -3.0, "tx3_dEl": 2.0}),  # tx0 conflict
+            ("Beşiktaş", {"tx1_dAz": 15.0, "tx2_on": False}),  # tx1, tx2 conflicts
+        ],
+        "expected_severity": "CRITICAL",
+        "expected_conflicts": True,
+        "explanation": "Multiple conflicts: tx0 (opposite), tx1 (same param), tx2 (boolean)"
+    },
+]
 
-def run_test_scenario(scenario_name, active_data, new_intent, new_plan):
-    print_separator(scenario_name)
+def run_tests():
+    print("="*80)
+    print("BASE STATION LEVEL CONFLICT DETECTION - TEST SUITE")
+    print("="*80)
     
-    # Verileri JSON string formatına çevir (Agent input formatı)
-    active_json = json.dumps(active_data)
-    new_intent_json = json.dumps(new_intent)
-    new_plan_json = json.dumps(new_plan)
-    
-    print(f"Active Intents: {len(active_data)}")
-    print(f"New Intent Target: {new_intent['target_area']} -> {new_intent['target_kpis']}")
-    
-    # Çakışma dedektörünü çalıştır
-    try:
-        result_json = detect_conflicts(new_intent_json, new_plan_json, active_json)
+    for i, test in enumerate(test_cases, 1):
+        print(f"\n{'='*80}")
+        print(f"TEST {i}: {test['name']}")
+        print(f"{'='*80}")
+        print(f"Expected: {test['expected_severity']} severity")
+        print(f"Explanation: {test['explanation']}")
+        print()
+        
+        # Create intents and plans
+        new_intent, new_plan = create_test_intent(test['new'][0], test['new'][1])
+        
+        active_list = []
+        for active_area, active_changes in test['active']:
+            active_intent, active_plan = create_test_intent(active_area, active_changes)
+            active_list.append({
+                "intent": active_intent.model_dump(),
+                "plan": active_plan.model_dump()
+            })
+        
+        # Run conflict detection
+        result_json = detect_conflicts(
+            new_intent_json=new_intent.model_dump_json(),
+            new_plan_json=new_plan.model_dump_json(),
+            active_intents_data=json.dumps(active_list)
+        )
+        
         result = json.loads(result_json)
+        conflict_report = result['conflict_report']
         
-        # --- EKRANA YAZDIRMA ---
-        conflict_report = result["conflict_report"]
-        proposals = result["proposals"]
+        # Print results
+        print(f"Result:")
+        print(f"  Conflicted: {conflict_report['is_conflicted']}")
+        print(f"  Max Severity: {conflict_report.get('conflict_summary', 'N/A')}")
+        print(f"  Total Conflicts: {len(conflict_report['details'])}")
+        print()
         
-        print("\n--- CONFLICT REPORT (Input for Meta-Agent) ---")
-        if conflict_report["is_conflicted"]:
-            print(f"❌ CONFLICT DETECTED! ({conflict_report['conflict_summary']})")
-            for detail in conflict_report["details"]:
-                print(f"   ► TYPE: {detail['conflict_type']}")
-                print(f"   ► SEVERITY: {detail['severity']}")
-                print(f"   ► PARAMETER: {detail['conflicting_param']}")
-                print(f"   ► DESCRIPTION: {detail['description']}")
-                print("   ---")
+        print("Conflict Details:")
+        for detail in conflict_report['details']:
+            print(f"  - Type: {detail['conflict_type']}")
+            print(f"    Severity: {detail['severity']}")
+            print(f"    Base Station: {detail.get('conflicting_base_station', 'N/A')}")
+            print(f"    Parameter: {detail.get('conflicting_param', 'N/A')}")
+            print(f"    Description: {detail['description']}")
+            print()
+        
+        print(f"Recommendation: {conflict_report['resolution_recommendation']}")
+        
+        # Validation
+        if conflict_report['is_conflicted'] == test['expected_conflicts']:
+            print(f"✅ PASS: Conflict detection matches expected")
         else:
-            print("✅ NO CONFLICT. (Safe to execute)")
-            
-        print(f"\n--- DATA PACKAGE STATS ---")
-        print(f"Total Proposals Packed: {len(proposals)}")
-        
-        # --- DOSYAYA KAYDETME (BURASI EKLENDİ) ---
-        # Dosya ismi oluştur: conflict_report_SenaryoAdi_Tarih.json
-        safe_name = scenario_name.replace(" ", "_").replace("(", "").replace(")", "").replace(".", "")
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"conflict_report_{safe_name}_{timestamp}.json"
-        
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-            
-        print(f"\n💾 SAVED TO: {filename}")
-            
-    except Exception as e:
-        print(f"💥 ERROR OCCURRED: {e}")
-        import traceback
-        traceback.print_exc()
-
-# ==========================================
-# SCENARIO 1: CRITICAL CONFLICT
-# ==========================================
-def test_critical_conflict():
-    active_item = {
-        "intent": {
-            "target_area": "Kadikoy",
-            "target_kpis": ["RX_COVERAGE_RATIO"],
-            "kpi_thresholds": [],
-            "priority": "HIGH",
-            "confidence": 1.0,
-            "affected_sectors": ["tx0"],
-            "configuration_change": [] 
-        },
-        "plan": {
-            "selected_config_id": 101,
-            "changes": [
-                {"param": "tx0_P_dBm", "before": 40.0, "after": 3.0, "unit": "dBm"}
-            ],
-            "expected_kpis": {},
-            "constraints_satisfied": True
-        }
-    }
-    
-    new_intent = {
-        "target_area": "Kadikoy",
-        "target_kpis": ["RX_POWER"],
-        "kpi_thresholds": [],
-        "priority": "MEDIUM",
-        "confidence": 0.9,
-        "affected_sectors": ["tx0"],
-        "configuration_change": []
-    }
-    
-    new_plan = {
-        "selected_config_id": 202,
-        "changes": [
-            {"param": "tx0_P_dBm", "before": 40.0, "after": -5.0, "unit": "dBm"}
-        ],
-        "expected_kpis": {},
-        "constraints_satisfied": True,
-        "current_config_id": 101
-    }
-    
-    run_test_scenario("1_CRITICAL_CONFLICT", [active_item], new_intent, new_plan)
-
-# ==========================================
-# SCENARIO 2: SPATIAL OVERLAP
-# ==========================================
-def test_spatial_overlap():
-    active_item = {
-        "intent": {
-            "target_area": "Besiktas",
-            "target_kpis": ["SINR"],
-            "kpi_thresholds": [],
-            "priority": "MEDIUM",
-            "confidence": 1.0,
-            "affected_sectors": ["tx1"],
-            "configuration_change": []
-        },
-        "plan": {
-            "selected_config_id": 303,
-            "changes": [
-                {"param": "tx1_dEl", "before": -2.0, "after": 2.0, "unit": "deg"}
-            ],
-            "expected_kpis": {},
-            "constraints_satisfied": True
-        }
-    }
-    
-    new_intent = {
-        "target_area": "Besiktas",
-        "target_kpis": ["THROUGHPUT_5P"],
-        "kpi_thresholds": [],
-        "priority": "LOW",
-        "confidence": 0.8,
-        "affected_sectors": ["tx1"],
-        "configuration_change": []
-    }
-    
-    new_plan = {
-        "selected_config_id": 404,
-        "changes": [
-            {"param": "tx1_dAz", "before": 0.0, "after": 10.0, "unit": "deg"}
-        ],
-        "expected_kpis": {},
-        "constraints_satisfied": True,
-        "current_config_id": 303
-    }
-    
-    run_test_scenario("2_SPATIAL_OVERLAP", [active_item], new_intent, new_plan)
-
-# ==========================================
-# SCENARIO 3: RESOURCE CONTENTION
-# ==========================================
-def test_resource_contention():
-    active_item = {
-        "intent": {
-            "target_area": "Uskudar",
-            "target_kpis": ["RX_POWER"],
-            "kpi_thresholds": [],
-            "priority": "HIGH",
-            "confidence": 1.0,
-            "affected_sectors": ["tx2"],
-            "configuration_change": []
-        },
-        "plan": {
-            "selected_config_id": 505,
-            "changes": [
-                {"param": "tx2_P_dBm", "before": 40.0, "after": 2.0, "unit": "dBm"}
-            ],
-            "expected_kpis": {},
-            "constraints_satisfied": True
-        }
-    }
-    
-    new_intent = {
-        "target_area": "Uskudar",
-        "target_kpis": ["SINR"],
-        "kpi_thresholds": [],
-        "priority": "HIGH",
-        "confidence": 0.9,
-        "affected_sectors": ["tx2"],
-        "configuration_change": []
-    }
-    
-    new_plan = {
-        "selected_config_id": 606,
-        "changes": [
-            {"param": "tx2_P_dBm", "before": 40.0, "after": 4.0, "unit": "dBm"}
-        ],
-        "expected_kpis": {},
-        "constraints_satisfied": True,
-        "current_config_id": 505
-    }
-    
-    run_test_scenario("3_RESOURCE_CONTENTION", [active_item], new_intent, new_plan)
+            print(f"❌ FAIL: Expected conflicts={test['expected_conflicts']}, got {conflict_report['is_conflicted']}")
 
 if __name__ == "__main__":
-    test_critical_conflict()
-    test_spatial_overlap()
-    test_resource_contention()
+    run_tests()
