@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from agno.agent import Agent
-from agno.models.google import Gemini
+from agno.models.groq import Groq
 
 load_dotenv()
 
@@ -677,7 +677,7 @@ OPT_INSTRUCTIONS = [
 optimization_agent = Agent(
     name="Optimization Agent",
     description="Generates a base-station configuration using a trained surrogate model and dataset-seeded search.",
-    model=Gemini(id=os.getenv("GEMINI_MODEL", "gemini-2.5-flash")),
+    model=Groq(id=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
     tools=[optimize_from_intent],
     output_schema=OptimizationPlan,
     instructions=OPT_INSTRUCTIONS,

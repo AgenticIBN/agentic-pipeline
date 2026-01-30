@@ -5,10 +5,10 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 from agno.agent import Agent
-from agno.models.google import Gemini  
+from agno.models.groq import Groq
 from dotenv import load_dotenv
 
-load_dotenv()  # .env içindeki GOOGLE_API_KEY'i ortam değişkeni olarak yükler
+load_dotenv()  # .env içindeki GROQ_API_KEY'i ortam değişkeni olarak yükler
 
 # --- 1) Şema: Sonraki agent'ların kullanacağı yapı ---
 
@@ -94,7 +94,7 @@ INSTRUCTIONS = [
 intent_parser_agent = Agent(
     name="Intent Parser",
     description="Parses natural language network intents into structured features for downstream agents.",
-    model=Gemini(id="gemini-2.5-flash"),  # Fast and efficient Gemini model
+    model=Groq(id="llama-3.3-70b-versatile"),  # Llama 3.3 70B versatile
     output_schema=IntentParse,
     instructions=INSTRUCTIONS,
     markdown=True,  # Better instruction parsing

@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 from agno.agent import Agent
-from agno.models.google import Gemini
+from agno.models.groq import Groq
 from dotenv import load_dotenv
 
 # Import schemas
@@ -375,7 +375,7 @@ RESOLUTION_INSTRUCTIONS = [
 conflict_resolution_agent = Agent(
     name="Conflict Resolution Meta-Agent",
     description="Resolves conflicts between network optimization intents using priority-based weighted merging.",
-    model=Gemini(id=os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")),
+    model=Groq(id=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
     tools=[resolve_conflicts],
     output_schema=ConflictResolutionOutput,
     instructions=RESOLUTION_INSTRUCTIONS,

@@ -56,26 +56,68 @@ class WorkflowState(BaseModel):
 # Agent 1: Intent Parser (already defined in intent_parser_agent.py)
 # intent_parser_agent - imported above
 
+# Intent storage file
+ACTIVE_INTENTS_FILE = "active_intents.json"
+
+def load_active_intents():
+    """Load active intents from persistent storage"""
+    import json
+    import os
+    if os.path.exists(ACTIVE_INTENTS_FILE):
+        with open(ACTIVE_INTENTS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_active_intents(intents):
+    """Save active intents to persistent storage"""
+    import json
+    with open(ACTIVE_INTENTS_FILE, 'w') as f:
+        json.dump(intents, f, indent=2)
+
+def clear_active_intents_tool() -> str:
+    """
+    Clear all active intents from the system.
+    Use this to reset the system state.
+    
+    Returns:
+        JSON string with confirmation
+    """
+    import os
+    if os.path.exists(ACTIVE_INTENTS_FILE):
+        os.remove(ACTIVE_INTENTS_FILE)
+        return json.dumps({"status": "success", "message": "All active intents cleared"})
+    return json.dumps({"status": "success", "message": "No active intents to clear"})
+
 # Create a workflow execution tool
-def execute_workflow_tool(natural_language_intent: str, active_intents_json: str = "[]") -> str:
+def execute_workflow_tool(natural_language_intent: str) -> str:
     """
     Execute the complete 6G optimization workflow.
     
     Args:
-        natural_language_intent: User's natural language intent
-        active_intents_json: JSON string of currently active intents (default: empty list)
+        natural_language_intent: User's natural language intent describing the network optimization goal
     
     Returns:
         JSON string with workflow execution results
     """
     import json
     
-    try:
-        active_intents = json.loads(active_intents_json)
-    except:
-        active_intents = []
+    # IMPORTANT: Load active intents from persistent storage
+    active_intents = load_active_intents()
+    print(f"\n📂 Loaded {len(active_intents)} active intent(s) from storage")
     
     result = run_workflow(natural_language_intent, active_intents)
+    
+    # Save the new intent to active intents if execution succeeded
+    if result.get('execution_strategy') in ['PARALLEL', 'MERGED', 'SINGLE']:
+        # Extract the new intent and plan
+        new_entry = {
+            "intent": result.get('parsed_intent'),
+            "plan": result.get('optimization_plan')
+        }
+        active_intents.append(new_entry)
+        save_active_intents(active_intents)
+        print(f"\n💾 Saved intent to storage. Total active intents: {len(active_intents)}")
+    
     return json.dumps(result, indent=2)
 
 # Agents are now just wrappers/proxies since the real logic is in the imported tools
@@ -136,7 +178,23 @@ Please parse this into structured IntentParse JSON.
     
     # Extract IntentParse from response
     try:
-        parsed_data = json.loads(parse_response.content.model_dump_json())
+        # Debug: Check response type
+        print(f"🔍 Parse response type: {type(parse_response)}")
+        print(f"🔍 Parse response content type: {type(parse_response.content)}")
+        
+        # Handle different response types
+        if hasattr(parse_response.content, 'model_dump_json'):
+            # It's already an IntentParse object
+            parsed_data = json.loads(parse_response.content.model_dump_json())
+        elif isinstance(parse_response.content, dict):
+            # It's a dict
+            parsed_data = parse_response.content
+        elif isinstance(parse_response.content, str):
+            # It's a JSON string
+            parsed_data = json.loads(parse_response.content)
+        else:
+            raise ValueError(f"Unexpected content type: {type(parse_response.content)}")
+        
         state.parsed_intent = IntentParse(**parsed_data)
         print(f"✅ Intent Parsed:")
         print(f"   Target Area: {state.parsed_intent.target_area}")
@@ -145,6 +203,8 @@ Please parse this into structured IntentParse JSON.
         print(f"   Confidence: {state.parsed_intent.confidence}")
     except Exception as e:
         print(f"❌ Parsing failed: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "error": f"Failed at intent parsing: {e}",
             "step": "INTENT_PARSING"
@@ -275,7 +335,9 @@ Please parse this into structured IntentParse JSON.
         "execution_strategy": state.execution_strategy,
         "conflict_detected": state.conflict_report.is_conflicted if state.conflict_report else False,
         "total_steps": 4,
-        "notes": state.notes
+        "notes": state.notes,
+        "parsed_intent": state.parsed_intent.model_dump() if state.parsed_intent else None,
+        "optimization_plan": state.optimization_plan.model_dump() if state.optimization_plan else None
     }
 
 # =====================================================
@@ -287,11 +349,11 @@ def setup_agno_os():
     
     # Create a Workflow Agent that can execute the full pipeline
     from agno.agent import Agent
-    from agno.models.google import Gemini
+    from agno.models.groq import Groq
     
     workflow_agent = Agent(
         name="6G Workflow Orchestrator",
-        model=Gemini(id="gemini-2.5-flash"),
+        model=Groq(id="llama-3.3-70b-versatile"),
         description="Complete 6G network optimization workflow: Intent Parsing → Optimization → Conflict Detection → Resolution",
         instructions=[
             "You execute the complete 6G network optimization workflow.",
@@ -300,10 +362,13 @@ def setup_agno_os():
             "2. Optimization", 
             "3. Conflict Detection",
             "4. Orchestration & Resolution",
-            "You will see progress updates for each step.",
-            "After workflow completes, summarize the final configuration and execution strategy."
+            "The system remembers all previous intents automatically.",
+            "If conflicts are detected with existing intents, the orchestrator will resolve them using priority-based merging.",
+            "After workflow completes, summarize the final configuration and execution strategy.",
+            "",
+            "To clear all active intents from the system, call clear_active_intents_tool."
         ],
-        tools=[execute_workflow_tool],
+        tools=[execute_workflow_tool, clear_active_intents_tool],
         markdown=True
     )
     

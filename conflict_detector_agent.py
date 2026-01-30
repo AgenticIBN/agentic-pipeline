@@ -5,7 +5,7 @@ import os
 from typing import List, Optional, Literal, Set, Dict
 from pydantic import BaseModel, Field
 from agno.agent import Agent
-from agno.models.google import Gemini
+from agno.models.groq import Groq
 from dotenv import load_dotenv
 
 # Import schemas from optimization_agent
@@ -336,7 +336,7 @@ CONFLICT_INSTRUCTIONS = [
 conflict_detector_agent = Agent(
     name="Base Station Level Conflict Detector",
     description="Analyzes network optimization plans for conflicts at base station level.",
-    model=Gemini(id=os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")),
+    model=Groq(id=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
     tools=[detect_conflicts],
     output_schema=MetaArbitrationInput,
     instructions=CONFLICT_INSTRUCTIONS,
