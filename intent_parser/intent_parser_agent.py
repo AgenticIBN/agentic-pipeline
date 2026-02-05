@@ -24,22 +24,14 @@ class KpiThreshold(BaseModel):
     delta: Optional[float] = Field(None, description="Magnitude for DELTA_UP / DELTA_DOWN")
     unit: Optional[str] = Field(None, description="e.g., dBm, dB, Mbps, users")
 
-class ConfigChange(BaseModel):
-    action: str = Field(..., description="Free-text config action, e.g., 'increase tilt by 2 degrees'")
-    parameter: Optional[str] = Field(None, description="Parameter name if explicitly mentioned")
-    direction: Optional[Literal["INCREASE", "DECREASE", "SET", "OPTIMIZE"]] = None
-    amount: Optional[float] = None
-    unit: Optional[str] = None
-
 class IntentParse(BaseModel):
+    """User's intent - what they want to achieve (not how to achieve it)"""
     target_area: str = Field(..., description="Where to apply: site/cell/cluster/city/coordinates")
     target_kpis: List[KpiName] = Field(..., min_length=1)
     kpi_thresholds: List[KpiThreshold] = Field(default_factory=list)
     time_constraint_start: Optional[str] = Field(None, description="ISO 8601 format: 2026-02-05T10:00:00")
     time_constraint_end: Optional[str] = Field(None, description="ISO 8601 format: 2026-02-05T14:00:00")
     priority: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = "MEDIUM"
-    configuration_change: List[ConfigChange] = Field(default_factory=list)
-    affected_sectors: List[str] = Field(default_factory=list)
     confidence: Optional[float] = Field(default=0.8, ge=0, le=1, description="Confidence score (auto-generated)")
 
 
@@ -63,12 +55,6 @@ INSTRUCTIONS = [
     "- 'decrease by', 'reduce by' → DELTA_DOWN (use delta field)",
     "- 'target', 'aim for', 'balance', 'optimize' → TARGET",
     "",
-    "## Configuration Change Parsing:",
-    "- Extract parameter names (e.g., 'tilt', 'azimuth', 'power', 'bandwidth')",
-    "- Identify direction: INCREASE, DECREASE, SET, or OPTIMIZE",
-    "- Extract amount and unit if specified",
-    "- Store full action description in 'action' field",
-    "",
     "## Priority Inference:",
     "- CRITICAL: Contains 'critical', 'urgent', 'emergency', or severe issues",
     "- HIGH: Contains 'high priority', 'important', 'asap'",
@@ -83,11 +69,10 @@ INSTRUCTIONS = [
     "- Below 0.50: Multiple critical fields unclear or missing",
     "",
     "## Important Rules:",
+    "- Focus on WHAT the user wants (goals), not HOW to achieve it (configuration)",
     "- Always extract target_area (city, site ID, cell ID, or coordinates)",
     "- Extract ALL mentioned KPIs into target_kpis array",
-    "- Only populate affected_sectors if explicitly mentioned (e.g., 'sector A', 'cell 3')",
-    "- Leave configuration_change empty if no config action is mentioned",
-    "- Parse time constraints into ISO format or descriptive format",
+    "- Parse time constraints into ISO 8601 format (YYYY-MM-DDTHH:MM:SS)",
     "- Be precise with units (dBm, dB, Mbps, users, degrees, etc.)",
 ]
 
