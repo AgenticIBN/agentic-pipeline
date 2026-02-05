@@ -64,6 +64,50 @@ def _extract_base_station_from_param(param: str) -> Optional[str]:
             return parts[0]  # tx0, tx1, tx2, tx3
     return None
 
+def _check_time_overlap(intent_a: IntentParse, intent_b: IntentParse) -> Optional[ConflictDetail]:
+    """
+    Check if two intents have overlapping time constraints.
+    Returns ConflictDetail if overlap exists, None otherwise.
+    
+    Time format expected: ISO 8601 (e.g., "2026-02-05T10:00:00")
+    """
+    from datetime import datetime
+    
+    # If either intent has no time constraints, consider no time conflict
+    if not (intent_a.time_constraint_start and intent_a.time_constraint_end):
+        return None
+    if not (intent_b.time_constraint_start and intent_b.time_constraint_end):
+        return None
+    
+    try:
+        # Parse time strings
+        a_start = datetime.fromisoformat(intent_a.time_constraint_start)
+        a_end = datetime.fromisoformat(intent_a.time_constraint_end)
+        b_start = datetime.fromisoformat(intent_b.time_constraint_start)
+        b_end = datetime.fromisoformat(intent_b.time_constraint_end)
+        
+        # Check for overlap: A and B overlap if (A.start < B.end) AND (B.start < A.end)
+        has_overlap = (a_start < b_end) and (b_start < a_end)
+        
+        if has_overlap:
+            # Calculate overlap duration
+            overlap_start = max(a_start, b_start)
+            overlap_end = min(a_end, b_end)
+            overlap_duration = (overlap_end - overlap_start).total_seconds() / 3600  # hours
+            
+            return ConflictDetail(
+                conflict_type="RESOURCE_CONTENTION",
+                severity="HIGH",
+                description=f"Time overlap detected. Intent A: {a_start} to {a_end}, Intent B: {b_start} to {b_end}. Overlap: {overlap_duration:.2f} hours.",
+                conflicting_intent_id="time_conflict"
+            )
+        else:
+            return None
+            
+    except (ValueError, AttributeError) as e:
+        # Invalid time format, skip time conflict check
+        return None
+
 def _get_base_station_params(plan: OptimizationPlan) -> Dict[str, List[str]]:
     """
     Group parameters by base station.
@@ -101,6 +145,7 @@ def _analyze_parameter_conflict(
         val_a = change_a.after
         val_b = change_b.after
         if val_a != val_b:
+            # TRUE CONFLICT: One wants ON, other wants OFF
             severity = "CRITICAL" if same_target_area else "HIGH"
             return ConflictDetail(
                 conflict_type="DIRECT_OPPOSITION",
@@ -111,16 +156,9 @@ def _analyze_parameter_conflict(
                 conflicting_intent_id="active_intent"
             )
         else:
-            # Both want the same state (e.g., both ON) - Low severity
-            severity = "MEDIUM" if same_target_area else "LOW"
-            return ConflictDetail(
-                conflict_type="RESOURCE_CONTENTION",
-                severity=severity,
-                conflicting_param=param,
-                conflicting_base_station=bs,
-                description=f"Both intents want to set {param} to {val_a}.",
-                conflicting_intent_id="active_intent"
-            )
+            # NO CONFLICT: Both want the same state (e.g., both ON)
+            # This is agreement, not conflict
+            return None
 
     # 2. Numeric Conflict (Power, Tilt, Azimuth)
     # 'after' is a delta value (e.g., +3.0 or -5.0)
@@ -221,17 +259,26 @@ def detect_conflicts(
         # Check if target areas overlap (used for severity boosting)
         same_target_area = (new_intent.target_area == active_intent.target_area)
         
+        # --- TIME OVERLAP CHECK (Priority Check) ---
+        time_conflict = _check_time_overlap(new_intent, active_intent)
+        if time_conflict:
+            time_conflict.conflicting_intent_id = str(active_plan.selected_config_id)
+            conflicts.append(time_conflict)
+        
         # --- A. BASE STATION LEVEL CONFLICT CHECK ---
         common_base_stations = set(new_bs_params.keys()) & set(active_bs_params.keys())
         
         if not common_base_stations:
-            # Different base stations - Very low conflict (coordination only)
-            conflicts.append(ConflictDetail(
-                conflict_type="SPATIAL_OVERLAP",
-                severity="LOW",
-                description=f"Intents modify different base stations. New: {list(new_bs_params.keys())}, Active: {list(active_bs_params.keys())}. Target areas: {new_intent.target_area} vs {active_intent.target_area}",
-                conflicting_intent_id=str(active_plan.selected_config_id)
-            ))
+            # Different base stations
+            if same_target_area:
+                # Same target area but different BSs - Low coordination needed
+                conflicts.append(ConflictDetail(
+                    conflict_type="SPATIAL_OVERLAP",
+                    severity="LOW",
+                    description=f"Same target area ({new_intent.target_area}) but different base stations. New: {list(new_bs_params.keys())}, Active: {list(active_bs_params.keys())}. May need coordination.",
+                    conflicting_intent_id=str(active_plan.selected_config_id)
+                ))
+            # else: Different BS + Different Area = No conflict at all, skip
             continue
         
         # --- B. PARAMETER LEVEL CONFLICT CHECK (on common base stations) ---
@@ -317,17 +364,23 @@ CONFLICT_INSTRUCTIONS = [
     "Even if intents target different geographic areas, they may conflict if they modify the SAME base stations.",
     "",
     "Conflict Detection Logic:",
-    "1. BASE STATION OVERLAP: Do plans modify the same base station (tx0-tx3)?",
-    "   - Different base stations → LOW severity (minimal conflict)",
-    "   - Same base station, different params → LOW-MEDIUM severity",
-    "   - Same base station, same param → Detailed analysis",
+    "1. TIME OVERLAP CHECK (First Priority):",
+    "   - If time_constraint_start/end overlap → HIGH severity conflict",
+    "   - No time constraints = no time conflict",
     "",
-    "2. PARAMETER CONFLICT: For common base stations and parameters:",
+    "2. BASE STATION OVERLAP: Do plans modify the same base station (tx0-tx3)?",
+    "   - Different BS + Different Area → NO CONFLICT (skip)",
+    "   - Different BS + Same Area → LOW severity (coordination)",
+    "   - Same BS, different params → LOW-MEDIUM severity",
+    "   - Same BS, same param → Detailed analysis",
+    "",
+    "3. PARAMETER CONFLICT: For common base stations and parameters:",
+    "   - Boolean params (tx_on): Same value → NO CONFLICT (agreement)",
     "   - Boolean params (tx_on): Different values → HIGH/CRITICAL",
     "   - Numeric params: Opposite directions (+/-) → HIGH/CRITICAL",
     "   - Numeric params: Same direction → MEDIUM/HIGH (saturation risk)",
     "",
-    "3. SEVERITY BOOSTING: If target_area also matches, increase severity by one level.",
+    "4. SEVERITY BOOSTING: If target_area also matches, increase severity by one level.",
     "   Example: HIGH → CRITICAL, MEDIUM → HIGH",
     "",
     "Output: MetaArbitrationInput with detailed ConflictReport and all AgentProposals.",
