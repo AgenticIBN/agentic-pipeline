@@ -142,8 +142,8 @@ def _analyze_parameter_conflict(
     
     # 1. Boolean Conflict (e.g., One sets ON, other sets OFF)
     if "on" in param.lower():
-        val_a = change_a.after
-        val_b = change_b.after
+        val_a = change_a.change
+        val_b = change_b.change
         if val_a != val_b:
             # TRUE CONFLICT: One wants ON, other wants OFF
             severity = "CRITICAL" if same_target_area else "HIGH"
@@ -161,10 +161,10 @@ def _analyze_parameter_conflict(
             return None
 
     # 2. Numeric Conflict (Power, Tilt, Azimuth)
-    # 'after' is a delta value (e.g., +3.0 or -5.0)
+    # 'change' is a delta value (e.g., +3.0 or -5.0)
     try:
-        delta_a = float(change_a.after)
-        delta_b = float(change_b.after)
+        delta_a = float(change_a.change)
+        delta_b = float(change_b.change)
     except (ValueError, TypeError):
         return None
 

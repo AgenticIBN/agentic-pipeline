@@ -25,8 +25,8 @@ def test_boolean_same_value():
     new_plan = OptimizationPlan(
         selected_config_id=12345,
         changes=[
-            ParamChange(param="tx0_on", before=False, after=True),
-            ParamChange(param="tx0_P_dBm", before=40.0, after=3.0, unit="dBm")
+            ParamChange(param="tx0_on", before=False, change=True),
+            ParamChange(param="tx0_P_dBm", before=40.0, change=3.0, unit="dBm")
         ],
         expected_kpis=KpiSnapshot(RX_POWER=-80.0, SINR=10.0),
         constraints_satisfied=True
@@ -42,8 +42,8 @@ def test_boolean_same_value():
     active_plan = OptimizationPlan(
         selected_config_id=54321,
         changes=[
-            ParamChange(param="tx0_on", before=False, after=True),  # Same value!
-            ParamChange(param="tx1_dAz", before=0.0, after=-5.0, unit="deg")
+            ParamChange(param="tx0_on", before=False, change=True),  # Same value!
+            ParamChange(param="tx1_dAz", before=0.0, change=-5.0, unit="deg")
         ],
         expected_kpis=KpiSnapshot(RX_POWER=-85.0, SINR=12.0),
         constraints_satisfied=True
@@ -91,7 +91,7 @@ def test_different_bs_different_area():
     new_plan = OptimizationPlan(
         selected_config_id=11111,
         changes=[
-            ParamChange(param="tx0_P_dBm", before=40.0, after=3.0, unit="dBm")
+            ParamChange(param="tx0_P_dBm", before=40.0, change=3.0, unit="dBm")
         ],
         expected_kpis=KpiSnapshot(RX_POWER=-80.0),
         constraints_satisfied=True
@@ -107,7 +107,7 @@ def test_different_bs_different_area():
     active_plan = OptimizationPlan(
         selected_config_id=22222,
         changes=[
-            ParamChange(param="tx2_dAz", before=0.0, after=-5.0, unit="deg")  # Different BS!
+            ParamChange(param="tx2_dAz", before=0.0, change=-5.0, unit="deg")  # Different BS!
         ],
         expected_kpis=KpiSnapshot(SINR=12.0),
         constraints_satisfied=True

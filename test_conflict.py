@@ -17,7 +17,7 @@ def create_test_intent(area: str, bs_changes: dict) -> tuple[IntentParse, Optimi
     )
     
     changes = [
-        ParamChange(param=param, before=0, after=value)
+        ParamChange(param=param, before=0, change=value)
         for param, value in bs_changes.items()
     ]
     

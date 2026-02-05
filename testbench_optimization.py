@@ -507,17 +507,17 @@ def print_config_comparison(current_config, changes):
     for change in changes:
         param = change["param"]
         before = change["before"]
-        after = change["after"]
+        change_val = change["change"]
         unit = change.get("unit", "")
         
-        if isinstance(after, bool):
-            status = "🔄 Changed" if before != after else "- Same"
-            print(f"{param:<20} {str(before):<15} {str(after):<15} {status:<10}")
+        if isinstance(change_val, bool):
+            status = "🔄 Changed" if before != change_val else "- Same"
+            print(f"{param:<20} {str(before):<15} {str(change_val):<15} {status:<10}")
         else:
-            # For numeric: after is delta
+            # For numeric: change is delta
             if before is not None:
                 before_str = f"{before:.2f} {unit}".strip()
-                delta_str = f"{after:+.2f} {unit}".strip() if after != 0 else "No change"
+                delta_str = f"{change_val:+.2f} {unit}".strip() if change_val != 0 else "No change"
                 status = "🔄 Changed" if after != 0 else "- Same"
             else:
                 before_str = "N/A"

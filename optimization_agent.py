@@ -44,12 +44,10 @@ class IntentParse(BaseModel):
     priority: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = "MEDIUM"
     configuration_change: List[Dict[str, Any]] = Field(default_factory=list)
     affected_sectors: List[str] = Field(default_factory=list)
-    confidence: float = Field(..., ge=0, le=1)
+    confidence: Optional[float] = Field(default=0.8, ge=0, le=1)  # Optional with default
 
     current_config_id: Optional[int] = None
     current_config: Optional[Dict[str, Any]] = None  # Direct config dict (alternative to config_id)
-    user_set_id: Optional[int] = None
-    k_users: Optional[int] = None
 
 
 # -----------------------------
@@ -58,7 +56,7 @@ class IntentParse(BaseModel):
 class ParamChange(BaseModel):
     param: str
     before: Any
-    after: Any
+    change: Any  # The change/delta to apply (was 'after')
     unit: Optional[str] = None
 
 
@@ -613,7 +611,7 @@ def optimize_from_intent(intent_json: str) -> str:
     # Build changes list
     changes: List[ParamChange] = []
     if current_cfg is not None:
-        # With current config: before=current, after=delta (change amount)
+        # With current config: before=current, change=delta (change amount)
         for i in range(4):
             for param_type in ["on", "P_dBm", "dEl", "dAz"]:
                 col = f"tx{i}_{param_type}"
@@ -621,26 +619,26 @@ def optimize_from_intent(intent_json: str) -> str:
                 after_val = best_cfg[col]
                 if before != after_val:
                     unit = None
-                    # For numeric params, 'after' shows the DELTA (change amount)
+                    # For numeric params, 'change' shows the DELTA (change amount)
                     if param_type in ["P_dBm", "dEl", "dAz"]:
                         delta = float(after_val) - float(before)
-                        after = delta  # Show change amount (+ for increase, - for decrease)
+                        change = delta  # Show change amount (+ for increase, - for decrease)
                         if param_type == "P_dBm":
                             unit = "dBm"
                         else:
                             unit = "deg"
                     else:
                         # For boolean 'on', show new state
-                        after = after_val
+                        change = after_val
                     
-                    changes.append(ParamChange(param=col, before=before, after=after, unit=unit))
+                    changes.append(ParamChange(param=col, before=before, change=change, unit=unit))
     else:
-        # Without current config: before=None, after=new_value
+        # Without current config: before=None, change=new_value
         for i in range(4):
-            changes.append(ParamChange(param=f"tx{i}_on", before=None, after=best_cfg[f"tx{i}_on"]))
-            changes.append(ParamChange(param=f"tx{i}_P_dBm", before=None, after=best_cfg[f"tx{i}_P_dBm"], unit="dBm"))
-            changes.append(ParamChange(param=f"tx{i}_dEl", before=None, after=best_cfg[f"tx{i}_dEl"], unit="deg"))
-            changes.append(ParamChange(param=f"tx{i}_dAz", before=None, after=best_cfg[f"tx{i}_dAz"], unit="deg"))
+            changes.append(ParamChange(param=f"tx{i}_on", before=None, change=best_cfg[f"tx{i}_on"]))
+            changes.append(ParamChange(param=f"tx{i}_P_dBm", before=None, change=best_cfg[f"tx{i}_P_dBm"], unit="dBm"))
+            changes.append(ParamChange(param=f"tx{i}_dEl", before=None, change=best_cfg[f"tx{i}_dEl"], unit="deg"))
+            changes.append(ParamChange(param=f"tx{i}_dAz", before=None, change=best_cfg[f"tx{i}_dAz"], unit="deg"))
 
     # Final constraint status
     constraints_ok, _ = _constraints_ok(intent, best_kpis, current_kpis)

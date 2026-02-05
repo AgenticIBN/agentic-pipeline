@@ -35,12 +35,12 @@ class IntentParse(BaseModel):
     target_area: str = Field(..., description="Where to apply: site/cell/cluster/city/coordinates")
     target_kpis: List[KpiName] = Field(..., min_length=1)
     kpi_thresholds: List[KpiThreshold] = Field(default_factory=list)
-    time_constraint_start: Optional[str] = Field(None)
-    time_constraint_end: Optional[str] = Field(None)
+    time_constraint_start: Optional[str] = Field(None, description="ISO 8601 format: 2026-02-05T10:00:00")
+    time_constraint_end: Optional[str] = Field(None, description="ISO 8601 format: 2026-02-05T14:00:00")
     priority: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = "MEDIUM"
     configuration_change: List[ConfigChange] = Field(default_factory=list)
     affected_sectors: List[str] = Field(default_factory=list)
-    confidence: float = Field(..., ge=0, le=1)
+    confidence: Optional[float] = Field(default=0.8, ge=0, le=1, description="Confidence score (auto-generated)")
 
 
 INSTRUCTIONS = [

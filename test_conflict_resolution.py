@@ -30,7 +30,7 @@ def create_test_proposal(
         ParamChange(
             param=param, 
             before=0 if not isinstance(value, bool) else False, 
-            after=value,
+            change=value,
             unit="dBm" if "P_dBm" in param else ("deg" if "dAz" in param or "dEl" in param else None)
         )
         for param, value in bs_changes.items()
