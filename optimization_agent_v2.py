@@ -253,7 +253,7 @@ class OptimizationAgent:
         
         # Extract RX power threshold if specified
         for thr in kpi_thresholds:
-            if thr.get("kpi") == "RX_POWER" and "value" in thr:
+            if thr.get("kpi") == "RX_POWER" and "value" in thr and thr["value"] is not None:
                 rx_power_thr = float(thr["value"])
                 break
         
@@ -288,26 +288,33 @@ class OptimizationAgent:
         else:
             seed_configs = [self._generate_default_config()]
         
+        # Check if DELTA_DOWN intent (power reduction)
+        has_delta_down = any(
+            thr.get("op") == "DELTA_DOWN" or thr.get("operator") == "DELTA_DOWN" 
+            for thr in kpi_thresholds
+        )
+        
         # Add diverse seeds for exploration
         seed_configs.append(self._generate_random_config())  # Random
         seed_configs.append(self._generate_random_config())  # Random
-        seed_configs.append(self._generate_extreme_config("max_power"))  # All max power
+        
+        if has_delta_down:
+            # For power reduction: prioritize low power seeds
+            seed_configs.append(self._generate_extreme_config("min_power"))  # All min power
+            seed_configs.append(self._generate_extreme_config("min_power"))  # Duplicate for emphasis
+        else:
+            # For power increase: use max power seeds
+            seed_configs.append(self._generate_extreme_config("max_power"))  # All max power
+            seed_configs.append(self._generate_extreme_config("max_power"))  # Duplicate
+        
         seed_configs.append(self._generate_extreme_config("neg_angles"))  # Negative angles
         seed_configs.append(self._generate_extreme_config("pos_angles"))  # Positive angles
-        
-        # Debug: Print seed configs
-        print(f"Generated {len(seed_configs)} seed configs for exploration:")
-        for i, seed in enumerate(seed_configs):
-            seed_kpis = self._compute_kpis(seed, context)
-            print(f"  Seed {i}: RX_POWER={seed_kpis.get('Prx_p5_dBm', 0):.2f} dBm, "
-                  f"TX0[P={seed.get('tx0_P_dBm', 0):.1f}, Az={seed.get('tx0_dAz', 0):.1f}, El={seed.get('tx0_dEl', 0):.1f}]")
-        print()
         
         # Search from each seed
         for seed_config in seed_configs:
             # Evaluate seed
             kpis = self._compute_kpis(seed_config, context)
-            score = self._score_candidate(kpis, target_kpis, kpi_thresholds, priority, current_kpis)
+            score = self._score_candidate(seed_config, kpis, target_kpis, kpi_thresholds, priority, current_kpis)
             constraints_ok = self._check_constraints(kpis, kpi_thresholds, current_kpis)
             
             search_stats["total_evaluated"] += 1
@@ -333,7 +340,7 @@ class OptimizationAgent:
             for _ in range(self.search_iterations // len(seed_configs)):
                 candidate = self._perturb_config(seed_config, current_config)
                 kpis = self._compute_kpis(candidate, context)
-                score = self._score_candidate(kpis, target_kpis, kpi_thresholds, priority, current_kpis)
+                score = self._score_candidate(candidate, kpis, target_kpis, kpi_thresholds, priority, current_kpis)
                 constraints_ok = self._check_constraints(kpis, kpi_thresholds, current_kpis)
                 
                 search_stats["total_evaluated"] += 1
@@ -354,11 +361,6 @@ class OptimizationAgent:
                         best_config = dict(candidate)
                         best_kpis = kpis
                         search_stats["best_score_found"] = score
-        
-        # Print search statistics
-        print(f"Search completed: {search_stats['total_evaluated']} configs evaluated, "
-              f"{search_stats['constraints_satisfied']} satisfied constraints")
-        print(f"Best score found: {search_stats['best_score_found']:.2f}")
         
         # If no valid config found, use best seed
         if best_config is None:
@@ -429,11 +431,12 @@ class OptimizationAgent:
     
     def _score_candidate(
         self,
-        kpis: Dict[str, float],
-        target_kpis: List[str],
-        kpi_thresholds: List[Dict],
+        config: dict,
+        kpis: dict,
+        target_kpis: list,
+        kpi_thresholds: list,
         priority: str,
-        current_kpis: Optional[Dict[str, float]],
+        current_kpis: Optional[dict],
     ) -> float:
         """Score a candidate configuration. Higher is better."""
         priority_weight = {"LOW": 0.5, "MEDIUM": 1.0, "HIGH": 1.5, "CRITICAL": 2.0}.get(priority, 1.0)
@@ -466,15 +469,31 @@ class OptimizationAgent:
                 margin = value - kpi_value
                 score += priority_weight * max(0, margin)
         
-        # Reward target KPIs
+        # Check for DELTA_DOWN intent to determine optimization direction
+        has_delta_down = any(thr.get("op") == "DELTA_DOWN" or thr.get("operator") == "DELTA_DOWN" for thr in kpi_thresholds)
+        
+        # Reward target KPIs (reverse direction if DELTA_DOWN)
         if "RX_POWER" in target_kpis and "Prx_p5_dBm" in kpis:
-            score += 0.1 * priority_weight * kpis["Prx_p5_dBm"]
+            if has_delta_down:
+                # For DELTA_DOWN: reward LOWER total TX power (not RX power!)
+                total_tx_power = sum(config.get(f"tx{i}_P_dBm", 0.0) for i in range(4))
+                power_score = 10.0 * priority_weight * (-total_tx_power)
+                score += power_score
+            else:
+                # Default: reward HIGHER RX power
+                score += 0.1 * priority_weight * kpis["Prx_p5_dBm"]
         
         if "SINR" in target_kpis and "SINR_p5_dB" in kpis:
-            score += 0.1 * priority_weight * kpis["SINR_p5_dB"]
+            if has_delta_down:
+                score += 0.1 * priority_weight * (-kpis["SINR_p5_dB"])
+            else:
+                score += 0.1 * priority_weight * kpis["SINR_p5_dB"]
         
         if "THROUGHPUT_5P" in target_kpis and "THROUGHPUT_5P" in kpis:
-            score += 0.01 * priority_weight * kpis["THROUGHPUT_5P"]
+            if has_delta_down:
+                score += 0.01 * priority_weight * (-kpis["THROUGHPUT_5P"])
+            else:
+                score += 0.01 * priority_weight * kpis["THROUGHPUT_5P"]
         
         if "SERVED_USERS" in target_kpis and "LOAD_IMBALANCE" in kpis:
             # Lower imbalance is better
@@ -598,6 +617,14 @@ class OptimizationAgent:
                 config[f"tx{i}_P_dBm"] = pr["power"]["max"]
                 config[f"tx{i}_dAz"] = pr["dAz"]["min"]  # -30
                 config[f"tx{i}_dEl"] = pr["dEl"]["min"]  # -5
+        
+        elif strategy == "min_power":
+            # All transmitters at min power - for DELTA_DOWN intents
+            for i in range(4):
+                config[f"tx{i}_on"] = True
+                config[f"tx{i}_P_dBm"] = pr["power"]["min"]  # Minimum power
+                config[f"tx{i}_dAz"] = 0.0  # Neutral angles
+                config[f"tx{i}_dEl"] = 0.0
         
         elif strategy == "neg_angles":
             # Max power with negative extreme angles

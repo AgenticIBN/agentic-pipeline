@@ -7,8 +7,8 @@ Works with conflict_detector_agent.py outputs
 from __future__ import annotations
 
 import json
-from typing import List, Optional, Dict, Any, Set
-from pydantic import BaseModel, Field
+from typing import Optional, Set
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # ============================================================================
@@ -17,12 +17,14 @@ from pydantic import BaseModel, Field
 
 class WeightedMergeOutput(BaseModel):
     """Output from weighted merge resolution."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     conflict_detected: bool
     resolution_strategy: str
     merged_result_id: str
-    contributing_results: List[Dict[str, Any]] = Field(default_factory=list)  # [{"id": "...", "priority": "...", "weight": ...}]
-    merged_config: Dict[str, Any]  # The merged optimization result
-    merge_details: List[Dict[str, Any]] = Field(default_factory=list)  # Details per parameter
+    contributing_results: list = Field(default_factory=list)  # [{"id": "...", "priority": "...", "weight": ...}]
+    merged_config: dict  # The merged optimization result
+    merge_details: list = Field(default_factory=list)  # Details per parameter
     resolution_notes: str
     conflict_summary: Optional[str] = None
 
@@ -44,9 +46,9 @@ PRIORITY_WEIGHT = {
 # ============================================================================
 
 def resolve_by_weighted_merge(
-    conflict_report: Dict[str, Any],
-    new_result: Dict[str, Any],
-    active_results: List[Dict[str, Any]]
+    conflict_report: dict,
+    new_result: dict,
+    active_results: list
 ) -> WeightedMergeOutput:
     """
     Weighted merge resolution: Merge all results using priority-based weights.
@@ -197,7 +199,7 @@ def resolve_by_weighted_merge(
 # HELPER FUNCTIONS
 # ============================================================================
 
-def extract_changes_from_result(result: Dict[str, Any]) -> Dict[str, float]:
+def extract_changes_from_result(result: dict) -> dict:
     """Extract parameter changes from optimization result."""
     changes_dict = {}
     
@@ -218,7 +220,7 @@ def extract_changes_from_result(result: Dict[str, Any]) -> Dict[str, float]:
     return changes_dict
 
 
-def get_result_id(result: Dict[str, Any]) -> str:
+def get_result_id(result: dict) -> str:
     """Get unique identifier for an optimization result."""
     if "output" in result and "selected_config_id" in result["output"]:
         return str(result["output"]["selected_config_id"])
@@ -228,16 +230,16 @@ def get_result_id(result: Dict[str, Any]) -> str:
         return f"result_{id(result)}"
 
 
-def get_priority(result: Dict[str, Any]) -> str:
+def get_priority(result: dict) -> str:
     """Get priority from optimization result input."""
     return result.get("input", {}).get("priority", "MEDIUM")
 
 
 def create_merged_result(
-    template_result: Dict[str, Any],
-    merged_changes: Dict[str, float],
-    result_info: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+    template_result: dict,
+    merged_changes: dict,
+    result_info: list
+) -> dict:
     """
     Create a merged optimization result structure.
     
@@ -296,7 +298,7 @@ def create_merged_result(
     return merged
 
 
-def merge_kpis(result_info: List[Dict[str, Any]]) -> Dict[str, float]:
+def merge_kpis(result_info: list) -> dict:
     """Merge expected KPIs using weighted average."""
     all_kpis = set()
     
