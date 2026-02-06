@@ -1,0 +1,65 @@
+{
+  "conflict_detected": true,
+  "resolution_strategy": "PRIORITY_SELECTION",
+  "winning_result_id": "20260206002",
+  "winning_priority": "CRITICAL",
+  "winning_config": {
+    "test_name": "reduce_load_imbalance",
+    "passed": true,
+    "input": {
+      "target_area": "sector_A",
+      "target_kpis": [
+        "LOAD_IMBALANCE"
+      ],
+      "priority": "CRITICAL"
+    },
+    "output": {
+      "selected_config_id": 20260206002,
+      "current_config_id": null,
+      "changes": [
+        {
+          "param": "tx0_P_dBm",
+          "before": 43.0,
+          "change": -1.0,
+          "unit": "dBm"
+        },
+        {
+          "param": "tx0_dAz",
+          "before": 0.0,
+          "change": 10.0,
+          "unit": "deg"
+        },
+        {
+          "param": "tx1_P_dBm",
+          "before": 43.0,
+          "change": -2.0,
+          "unit": "dBm"
+        },
+        {
+          "param": "tx1_dAz",
+          "before": 120.0,
+          "change": 5.0,
+          "unit": "deg"
+        },
+        {
+          "param": "tx3_on",
+          "before": false,
+          "change": true,
+          "unit": null
+        }
+      ],
+      "expected_kpis": {
+        "RX_POWER": -55.8,
+        "SINR": 20.5,
+        "THROUGHPUT_5P": 3.5,
+        "LOAD_IMBALANCE": 2.1
+      },
+      "constraints_satisfied": true
+    }
+  },
+  "rejected_result_ids": [
+    "20260206001"
+  ],
+  "resolution_notes": "Conflicts: 4 | Strategy: PRIORITY_SELECTION | Winner: 20260206002 (Priority: CRITICAL) | Rejected: 1 result(s) | Decision: Keep active result, reject new result",
+  "conflict_summary": "Found 4 conflict(s) between new result (20260206001) and 1 active result(s). Conflicting parameters: tx0_P_dBm, tx0_dAz, tx1_P_dBm, tx1_dAz"
+}
