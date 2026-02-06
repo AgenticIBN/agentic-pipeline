@@ -1,0 +1,188 @@
+{
+  "conflict_detected": true,
+  "resolution_strategy": "WEIGHTED_MERGE",
+  "merged_result_id": "merged_2_results",
+  "contributing_results": [
+    {
+      "id": "20260206001",
+      "priority": "HIGH",
+      "weight": 3,
+      "weight_pct": "42.9%"
+    },
+    {
+      "id": "20260206002",
+      "priority": "CRITICAL",
+      "weight": 4,
+      "weight_pct": "57.1%"
+    }
+  ],
+  "merged_config": {
+    "test_name": "weighted_merge",
+    "passed": true,
+    "input": {
+      "target_area": "sector_A",
+      "target_kpis": [
+        "LOAD_IMBALANCE",
+        "RX_POWER",
+        "SINR",
+        "THROUGHPUT_5P"
+      ],
+      "priority": "MERGED"
+    },
+    "output": {
+      "selected_config_id": "merged_config",
+      "current_config_id": null,
+      "changes": [
+        {
+          "param": "tx0_P_dBm",
+          "before": 0.0,
+          "change": 0.71,
+          "unit": "dBm"
+        },
+        {
+          "param": "tx0_dAz",
+          "before": 0.0,
+          "change": 3.57,
+          "unit": "deg"
+        },
+        {
+          "param": "tx1_P_dBm",
+          "before": 0.0,
+          "change": 0.14,
+          "unit": "dBm"
+        },
+        {
+          "param": "tx1_dAz",
+          "before": 0.0,
+          "change": 0.71,
+          "unit": "deg"
+        },
+        {
+          "param": "tx2_P_dBm",
+          "before": 0.0,
+          "change": 2.0,
+          "unit": "dBm"
+        },
+        {
+          "param": "tx3_on",
+          "before": 0.0,
+          "change": 1.0,
+          "unit": null
+        }
+      ],
+      "expected_kpis": {
+        "LOAD_IMBALANCE": 3.43,
+        "RX_POWER": -54.39,
+        "SINR": 20.8,
+        "THROUGHPUT_5P": 3.63
+      },
+      "constraints_satisfied": true
+    }
+  },
+  "merge_details": [
+    {
+      "parameter": "tx3_on",
+      "merged_value": 1.0,
+      "contributions": [
+        {
+          "result_id": "20260206002",
+          "priority": "CRITICAL",
+          "weight": 4,
+          "value": 1.0
+        }
+      ],
+      "formula": "(1.0*4) / 4"
+    },
+    {
+      "parameter": "tx2_P_dBm",
+      "merged_value": 2.0,
+      "contributions": [
+        {
+          "result_id": "20260206001",
+          "priority": "HIGH",
+          "weight": 3,
+          "value": 2.0
+        }
+      ],
+      "formula": "(2.0*3) / 3"
+    },
+    {
+      "parameter": "tx1_P_dBm",
+      "merged_value": 0.14,
+      "contributions": [
+        {
+          "result_id": "20260206001",
+          "priority": "HIGH",
+          "weight": 3,
+          "value": 3.0
+        },
+        {
+          "result_id": "20260206002",
+          "priority": "CRITICAL",
+          "weight": 4,
+          "value": -2.0
+        }
+      ],
+      "formula": "(3.0*3 + -2.0*4) / 7"
+    },
+    {
+      "parameter": "tx0_dAz",
+      "merged_value": 3.57,
+      "contributions": [
+        {
+          "result_id": "20260206001",
+          "priority": "HIGH",
+          "weight": 3,
+          "value": -5.0
+        },
+        {
+          "result_id": "20260206002",
+          "priority": "CRITICAL",
+          "weight": 4,
+          "value": 10.0
+        }
+      ],
+      "formula": "(-5.0*3 + 10.0*4) / 7"
+    },
+    {
+      "parameter": "tx1_dAz",
+      "merged_value": 0.71,
+      "contributions": [
+        {
+          "result_id": "20260206001",
+          "priority": "HIGH",
+          "weight": 3,
+          "value": -5.0
+        },
+        {
+          "result_id": "20260206002",
+          "priority": "CRITICAL",
+          "weight": 4,
+          "value": 5.0
+        }
+      ],
+      "formula": "(-5.0*3 + 5.0*4) / 7"
+    },
+    {
+      "parameter": "tx0_P_dBm",
+      "merged_value": 0.71,
+      "contributions": [
+        {
+          "result_id": "20260206001",
+          "priority": "HIGH",
+          "weight": 3,
+          "value": 3.0
+        },
+        {
+          "result_id": "20260206002",
+          "priority": "CRITICAL",
+          "weight": 4,
+          "value": -1.0
+        }
+      ],
+      "formula": "(3.0*3 + -1.0*4) / 7"
+    }
+  ],
+  "resolution_notes": "Conflicts: 4 | Strategy: WEIGHTED_MERGE | Contributing results: 2 |   - 20260206001 (Priority: HIGH, Weight: 3, 42.9%) |   - 20260206002 (Priority: CRITICAL, Weight: 4, 57.1%) | Merged parameters: 6",
+  "conflict_summary": "Found 4 conflict(s) between new result (20260206001) and 1 active result(s). Conflicting parameters: tx0_P_dBm, tx0_dAz, tx1_P_dBm, tx1_dAz"
+}

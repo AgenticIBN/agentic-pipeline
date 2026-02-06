@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Conflict Resolution Agent V2
-Pure deterministic conflict resolution based on priorities
+Priority Based Resolution Agent V2
+Pure deterministic resolution based on priorities
 Works with conflict_detector_agent.py outputs
 """
 from __future__ import annotations
@@ -15,8 +15,8 @@ from pydantic import BaseModel, Field
 # SCHEMAS
 # ============================================================================
 
-class ResolutionOutput(BaseModel):
-    """Output from conflict resolution."""
+class PriorityBasedResolutionOutput(BaseModel):
+    """Output from priority-based resolution."""
     conflict_detected: bool
     resolution_strategy: str
     winning_result_id: Optional[str] = None
@@ -43,13 +43,13 @@ PRIORITY_RANK = {
 # MAIN RESOLUTION FUNCTION
 # ============================================================================
 
-def resolve_conflicts_simple(
+def resolve_by_priority(
     conflict_report: Dict[str, Any],
     new_result: Dict[str, Any],
     active_results: List[Dict[str, Any]]
-) -> ResolutionOutput:
+) -> PriorityBasedResolutionOutput:
     """
-    Simple conflict resolution: Select result with highest priority.
+    Priority-based resolution: Select result with highest priority.
     
     Priority order: CRITICAL > HIGH > MEDIUM > LOW
     If same priority, prefer active results (already applied).
@@ -60,12 +60,12 @@ def resolve_conflicts_simple(
         active_results: List of active optimization results
         
     Returns:
-        ResolutionOutput with winning result
+        PriorityBasedResolutionOutput with winning result
     """
     
     # Check if conflict exists
     if not conflict_report.get("is_conflicted", False):
-        return ResolutionOutput(
+        return PriorityBasedResolutionOutput(
             conflict_detected=False,
             resolution_strategy="NO_CONFLICT",
             winning_result_id=get_result_id(new_result),
@@ -120,7 +120,7 @@ def resolve_conflicts_simple(
     else:
         notes.append("Decision: Keep active result, reject new result")
     
-    return ResolutionOutput(
+    return PriorityBasedResolutionOutput(
         conflict_detected=True,
         resolution_strategy="PRIORITY_SELECTION",
         winning_result_id=winner["result_id"],
@@ -156,7 +156,7 @@ def get_priority(result: Dict[str, Any]) -> str:
 # ============================================================================
 
 def main():
-    """Test conflict resolution with test_conflict_detection_result.json"""
+    """Test priority-based resolution with test_conflict_detection_result.json"""
     import sys
     
     # Load conflict detection result
@@ -170,7 +170,7 @@ def main():
         sys.exit(1)
     
     print("="*80)
-    print("CONFLICT RESOLUTION TEST")
+    print("PRIORITY-BASED RESOLUTION TEST")
     print("="*80)
     print()
     
@@ -189,10 +189,10 @@ def main():
     print()
     
     # Run resolution
-    print("Running Conflict Resolution...")
+    print("Running Priority-Based Resolution...")
     print()
     
-    resolution = resolve_conflicts_simple(
+    resolution = resolve_by_priority(
         conflict_report=conflict_report,
         new_result=new_result,
         active_results=active_results
@@ -200,7 +200,7 @@ def main():
     
     # Display results
     print("="*80)
-    print("CONFLICT RESOLUTION RESULT:")
+    print("PRIORITY-BASED RESOLUTION RESULT:")
     print("="*80)
     print(f"Conflict Detected: {resolution.conflict_detected}")
     print(f"Strategy: {resolution.resolution_strategy}")
@@ -249,7 +249,7 @@ def main():
         print("="*80)
     
     # Save result
-    output_file = "test_conflict_resolution_result.json"
+    output_file = "test_priority_based_resolution_result.json"
     with open(output_file, "w") as f:
         json.dump(resolution.model_dump(), f, indent=2)
     
