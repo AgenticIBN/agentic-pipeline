@@ -3,3 +3,6 @@
 __pycache__/
 *.pyc
 *.log
+# Model files (too large for GitHub)
+models/*.joblib
+*.joblib

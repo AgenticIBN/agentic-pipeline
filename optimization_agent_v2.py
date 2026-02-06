@@ -48,6 +48,7 @@ class SurrogateModel:
     bw_hz: int
     has_throughput_col: bool
     throughput_col: Optional[str]
+    feature_names: Optional[List[str]] = None  # For engineered features
     
     @classmethod
     def load(cls, model_path: str) -> SurrogateModel:
@@ -65,7 +66,46 @@ class SurrogateModel:
             bw_hz=artifact.get("bw_hz", 10_000_000),
             has_throughput_col=artifact.get("has_throughput_col", False),
             throughput_col=artifact.get("throughput_col", None),
+            feature_names=artifact.get("feature_names", None),
         )
+    
+    def _engineer_features(self, row: Dict[str, float]) -> Dict[str, float]:
+        """Apply same feature engineering as training."""
+        # Average power
+        on_txs = [i for i in range(4) if row.get(f"tx{i}_on", 0) == 1]
+        if on_txs:
+            row["avg_power"] = np.mean([row.get(f"tx{i}_P_dBm", 0) for i in on_txs])
+        else:
+            row["avg_power"] = 0.0
+        
+        # Power std
+        powers = [row.get(f"tx{i}_P_dBm", 0) for i in range(4)]
+        row["power_std"] = float(np.std(powers))
+        
+        # Angle statistics
+        row["avg_azimuth"] = np.mean([row.get(f"tx{i}_dAz", 0) for i in range(4)])
+        row["avg_elevation"] = np.mean([row.get(f"tx{i}_dEl", 0) for i in range(4)])
+        azs = [row.get(f"tx{i}_dAz", 0) for i in range(4)]
+        els = [row.get(f"tx{i}_dEl", 0) for i in range(4)]
+        row["azimuth_range"] = max(azs) - min(azs)
+        row["elevation_range"] = max(els) - min(els)
+        
+        # Interactions
+        for i in range(4):
+            p = row.get(f"tx{i}_P_dBm", 0)
+            az = row.get(f"tx{i}_dAz", 0)
+            el = row.get(f"tx{i}_dEl", 0)
+            row[f"tx{i}_P_x_Az"] = p * az
+            row[f"tx{i}_P_x_El"] = p * el
+            row[f"tx{i}_Az_x_El"] = az * el
+        
+        # Active count
+        row["n_active_tx"] = sum(1 for i in range(4) if row.get(f"tx{i}_on", 0) == 1)
+        
+        # Uniformity
+        row["azimuth_uniformity"] = -float(np.std(azs))
+        
+        return row
     
     def predict(self, config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, float]:
         """
@@ -100,8 +140,15 @@ class SurrogateModel:
                 row[f"tx{i}_dAz"] = float(config.get(f"tx{i}_dAz", 0.0))
                 row[f"tx{i}_dEl"] = float(config.get(f"tx{i}_dEl", 0.0))
         
+        # Apply feature engineering if model uses it
+        if self.feature_names:
+            row = self._engineer_features(row)
+            feature_list = self.feature_names
+        else:
+            feature_list = self.feature_cols
+        
         # Build feature array
-        X = np.array([[float(row.get(c, 0.0)) for c in self.feature_cols]], dtype=np.float32)
+        X = np.array([[float(row.get(c, 0.0)) for c in feature_list]], dtype=np.float32)
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
         
         # Predict all targets
@@ -172,8 +219,8 @@ class OptimizationAgent:
         """
         self.surrogate = surrogate
         self.power_deltas = power_deltas or [-3, -2, -1, 0, 1, 2, 3]
-        self.azimuth_deltas = azimuth_deltas or [-10, -5, -2, 0, 2, 5, 10]
-        self.elevation_deltas = elevation_deltas or [-3, -2, -1, 0, 1, 2, 3]
+        self.azimuth_deltas = azimuth_deltas or [-30, -20, -10, -5, 0, 5, 10, 20, 30]
+        self.elevation_deltas = elevation_deltas or [-5, -3, -2, -1, 0, 1, 2, 3, 5]
         self.search_iterations = search_iterations
         self.rng = np.random.default_rng(random_seed)
     
@@ -228,15 +275,33 @@ class OptimizationAgent:
         best_kpis = None
         best_score = -1e18
         
+        # Track search statistics
+        search_stats = {
+            "total_evaluated": 0,
+            "constraints_satisfied": 0,
+            "best_score_found": -1e18,
+        }
+        
         # Use current config as seed if available, otherwise generate from ranges
         if current_config:
             seed_configs = [current_config]
         else:
             seed_configs = [self._generate_default_config()]
         
-        # Add a few random seeds for diversity
-        for _ in range(3):
-            seed_configs.append(self._generate_random_config())
+        # Add diverse seeds for exploration
+        seed_configs.append(self._generate_random_config())  # Random
+        seed_configs.append(self._generate_random_config())  # Random
+        seed_configs.append(self._generate_extreme_config("max_power"))  # All max power
+        seed_configs.append(self._generate_extreme_config("neg_angles"))  # Negative angles
+        seed_configs.append(self._generate_extreme_config("pos_angles"))  # Positive angles
+        
+        # Debug: Print seed configs
+        print(f"Generated {len(seed_configs)} seed configs for exploration:")
+        for i, seed in enumerate(seed_configs):
+            seed_kpis = self._compute_kpis(seed, context)
+            print(f"  Seed {i}: RX_POWER={seed_kpis.get('Prx_p5_dBm', 0):.2f} dBm, "
+                  f"TX0[P={seed.get('tx0_P_dBm', 0):.1f}, Az={seed.get('tx0_dAz', 0):.1f}, El={seed.get('tx0_dEl', 0):.1f}]")
+        print()
         
         # Search from each seed
         for seed_config in seed_configs:
@@ -245,10 +310,24 @@ class OptimizationAgent:
             score = self._score_candidate(kpis, target_kpis, kpi_thresholds, priority, current_kpis)
             constraints_ok = self._check_constraints(kpis, kpi_thresholds, current_kpis)
             
-            if constraints_ok and score > best_score:
-                best_score = score
-                best_config = dict(seed_config)
-                best_kpis = kpis
+            search_stats["total_evaluated"] += 1
+            if constraints_ok:
+                search_stats["constraints_satisfied"] += 1
+            
+            # Accept if better score (prioritize constraint satisfaction)
+            if constraints_ok:
+                if score > best_score:
+                    best_score = score
+                    best_config = dict(seed_config)
+                    best_kpis = kpis
+                    search_stats["best_score_found"] = score
+            elif best_config is None:
+                # No valid config yet, accept this as fallback
+                if score > best_score:
+                    best_score = score
+                    best_config = dict(seed_config)
+                    best_kpis = kpis
+                    search_stats["best_score_found"] = score
             
             # Local search around seed
             for _ in range(self.search_iterations // len(seed_configs)):
@@ -257,10 +336,29 @@ class OptimizationAgent:
                 score = self._score_candidate(kpis, target_kpis, kpi_thresholds, priority, current_kpis)
                 constraints_ok = self._check_constraints(kpis, kpi_thresholds, current_kpis)
                 
-                if constraints_ok and score > best_score:
-                    best_score = score
-                    best_config = dict(candidate)
-                    best_kpis = kpis
+                search_stats["total_evaluated"] += 1
+                if constraints_ok:
+                    search_stats["constraints_satisfied"] += 1
+                
+                # Accept if better score (prioritize constraint satisfaction)
+                if constraints_ok:
+                    if score > best_score:
+                        best_score = score
+                        best_config = dict(candidate)
+                        best_kpis = kpis
+                        search_stats["best_score_found"] = score
+                elif best_config is None or not self._check_constraints(best_kpis, kpi_thresholds, current_kpis):
+                    # No valid config yet OR current best also invalid, accept better score
+                    if score > best_score:
+                        best_score = score
+                        best_config = dict(candidate)
+                        best_kpis = kpis
+                        search_stats["best_score_found"] = score
+        
+        # Print search statistics
+        print(f"Search completed: {search_stats['total_evaluated']} configs evaluated, "
+              f"{search_stats['constraints_satisfied']} satisfied constraints")
+        print(f"Best score found: {search_stats['best_score_found']:.2f}")
         
         # If no valid config found, use best seed
         if best_config is None:
@@ -487,6 +585,42 @@ class OptimizationAgent:
         
         return config
     
+    def _generate_extreme_config(self, strategy: str) -> Dict[str, Any]:
+        """Generate extreme configurations for exploration."""
+        pr = self.surrogate.param_ranges
+        
+        config = {}
+        
+        if strategy == "max_power":
+            # All transmitters at max power with extreme angles
+            for i in range(4):
+                config[f"tx{i}_on"] = True
+                config[f"tx{i}_P_dBm"] = pr["power"]["max"]
+                config[f"tx{i}_dAz"] = pr["dAz"]["min"]  # -30
+                config[f"tx{i}_dEl"] = pr["dEl"]["min"]  # -5
+        
+        elif strategy == "neg_angles":
+            # Max power with negative extreme angles
+            for i in range(4):
+                config[f"tx{i}_on"] = True
+                config[f"tx{i}_P_dBm"] = pr["power"]["max"]
+                config[f"tx{i}_dAz"] = pr["dAz"]["min"]
+                config[f"tx{i}_dEl"] = pr["dEl"]["min"]
+        
+        elif strategy == "pos_angles":
+            # Max power with positive extreme angles
+            for i in range(4):
+                config[f"tx{i}_on"] = True
+                config[f"tx{i}_P_dBm"] = pr["power"]["max"]
+                config[f"tx{i}_dAz"] = pr["dAz"]["max"]
+                config[f"tx{i}_dEl"] = pr["dEl"]["max"]
+        
+        else:
+            # Default: mid-range
+            return self._generate_default_config()
+        
+        return config
+    
     def _perturb_config(
         self,
         config: Dict[str, Any],
@@ -628,90 +762,37 @@ class OptimizationAgent:
 
 
 # ============================================================================
-# MAIN EXAMPLE
+# CONVENIENCE FUNCTIONS FOR EXTERNAL USE
 # ============================================================================
 
-def main():
-    """Example usage of optimization agent."""
+def load_agent(model_path: str = None, search_iterations: int = 1000, random_seed: int = 42) -> OptimizationAgent:
+    """
+    Load trained surrogate model and create optimization agent.
     
-    # Load trained surrogate model
-    model_path = os.getenv("MODEL_PATH", "./models/surrogate.joblib")
-    print(f"Loading surrogate model from: {model_path}")
+    Args:
+        model_path: Path to trained surrogate model (defaults to MODEL_PATH env var)
+        search_iterations: Number of search iterations
+        random_seed: Random seed for reproducibility
+    
+    Returns:
+        Initialized OptimizationAgent instance
+    """
+    if model_path is None:
+        model_path = os.getenv("MODEL_PATH", "./models/surrogate.joblib")
     
     surrogate = SurrogateModel.load(model_path)
-    print(f"Loaded model with {len(surrogate.models)} KPI predictors")
-    print(f"Parameter ranges: {surrogate.param_ranges}")
-    
-    # Initialize optimization agent
     agent = OptimizationAgent(
         surrogate=surrogate,
-        search_iterations=1000,
-        random_seed=42,
+        search_iterations=search_iterations,
+        random_seed=random_seed,
     )
-    print("\nOptimization agent initialized")
-    
-    # Sample intent
-    sample_intent = {
-        "test_name": "example_optimization",
-        "target_area": "sector_A",
-        "target_kpis": ["RX_POWER", "THROUGHPUT_5P"],
-        "kpi_thresholds": [
-            {
-                "kpi": "RX_POWER",
-                "op": "GTE",
-                "value": -95.0,
-                "unit": "dBm",
-            },
-        ],
-        "priority": "HIGH",
-        "confidence": 0.95,
-        "current_config": {
-            "tx0_on": True,
-            "tx0_P_dBm": 43.0,
-            "tx0_dAz": 0.0,
-            "tx0_dEl": 0.0,
-            "tx1_on": True,
-            "tx1_P_dBm": 43.0,
-            "tx1_dAz": 120.0,
-            "tx1_dEl": 0.0,
-            "tx2_on": True,
-            "tx2_P_dBm": 43.0,
-            "tx2_dAz": -120.0,
-            "tx2_dEl": 0.0,
-            "tx3_on": False,
-            "tx3_P_dBm": 0.0,
-            "tx3_dAz": 0.0,
-            "tx3_dEl": 0.0,
-        },
-        "k_users": 800,
-        "user_set_id": 0,
-    }
-    
-    print("\n" + "="*80)
-    print("Running optimization with sample intent:")
-    print(json.dumps(sample_intent, indent=2))
-    print("="*80 + "\n")
-    
-    # Run optimization
-    result = agent.optimize(sample_intent)
-    
-    # Print result
-    print("\n" + "="*80)
-    print("OPTIMIZATION RESULT:")
-    print("="*80)
-    print(json.dumps(result, indent=2))
-    print("="*80)
-    
-    # Summary
-    output = result["output"]
-    print(f"\n✓ Optimization complete!")
-    print(f"  Constraints satisfied: {output['constraints_satisfied']}")
-    print(f"  Number of changes: {len(output['changes'])}")
-    print(f"  Expected RX_POWER: {output['expected_kpis']['RX_POWER']:.2f} dBm")
-    print(f"  Expected SINR: {output['expected_kpis']['SINR']:.2f} dB")
-    print(f"  Expected THROUGHPUT_5P: {output['expected_kpis']['THROUGHPUT_5P']:.2f} Mbps")
-    print(f"  Expected LOAD_IMBALANCE: {output['expected_kpis']['LOAD_IMBALANCE']:.2f}")
-    
+    return agent
+
 
 if __name__ == "__main__":
-    main()
+    print("optimization_agent_v2.py is a module.")
+    print("Use: from optimization_agent_v2 import load_agent")
+    print("")
+    print("Example:")
+    print("  agent = load_agent()")
+    print("  result = agent.optimize(intent_dict)")

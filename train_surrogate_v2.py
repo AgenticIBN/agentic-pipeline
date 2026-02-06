@@ -108,6 +108,39 @@ class SurrogateTrainer:
         
         self.models: Dict[str, any] = {}
         self.param_ranges: Dict[str, Dict[str, float]] = {}
+        self.feature_names = None  # Will be set after feature engineering
+    
+    def _engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create additional features to capture nonlinear interactions."""
+        df = df.copy()
+        
+        # Average power across all ON transmitters
+        on_mask = (df[[f"tx{i}_on" for i in range(4)]] == 1).values
+        powers = df[[f"tx{i}_P_dBm" for i in range(4)]].values
+        df["avg_power"] = (powers * on_mask).sum(axis=1) / (on_mask.sum(axis=1) + 1e-6)
+        
+        # Power variance (heterogeneity)
+        df["power_std"] = df[[f"tx{i}_P_dBm" for i in range(4)]].std(axis=1)
+        
+        # Angle statistics
+        df["avg_azimuth"] = df[[f"tx{i}_dAz" for i in range(4)]].mean(axis=1)
+        df["avg_elevation"] = df[[f"tx{i}_dEl" for i in range(4)]].mean(axis=1)
+        df["azimuth_range"] = df[[f"tx{i}_dAz" for i in range(4)]].max(axis=1) - df[[f"tx{i}_dAz" for i in range(4)]].min(axis=1)
+        df["elevation_range"] = df[[f"tx{i}_dEl" for i in range(4)]].max(axis=1) - df[[f"tx{i}_dEl" for i in range(4)]].min(axis=1)
+        
+        # Power * angle interactions (for each TX)
+        for i in range(4):
+            df[f"tx{i}_P_x_Az"] = df[f"tx{i}_P_dBm"] * df[f"tx{i}_dAz"]
+            df[f"tx{i}_P_x_El"] = df[f"tx{i}_P_dBm"] * df[f"tx{i}_dEl"]
+            df[f"tx{i}_Az_x_El"] = df[f"tx{i}_dAz"] * df[f"tx{i}_dEl"]
+        
+        # Number of active transmitters
+        df["n_active_tx"] = df[[f"tx{i}_on" for i in range(4)]].sum(axis=1)
+        
+        # Angle uniformity (all same = good coverage)
+        df["azimuth_uniformity"] = -df[[f"tx{i}_dAz" for i in range(4)]].std(axis=1)
+        
+        return df
         
     def _sanitize_tx_params(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean TX parameters: OFF tx -> zero power/angles."""
@@ -143,6 +176,7 @@ class SurrogateTrainer:
     def _clean_targets(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filter rows with valid target values."""
         df = df.copy()
+        initial_count = len(df)
         
         # Convert to numeric
         for col in self.target_cols:
@@ -150,36 +184,70 @@ class SurrogateTrainer:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
         # Remove extreme sentinel values
+        sentinel_mask = np.ones(len(df), dtype=bool)
         for col in self.target_cols:
             if col in df.columns:
-                df.loc[(df[col] < -1e6) | (df[col] > 1e6), col] = np.nan
+                col_mask = (df[col] >= -1e6) & (df[col] <= 1e6)
+                sentinel_mask &= col_mask
+        sentinel_removed = (~sentinel_mask).sum()
+        df = df[sentinel_mask].copy()
         
         # Apply physical bounds
         mask = np.ones(len(df), dtype=bool)
         
+        # Track what gets filtered
+        filter_reasons = {}
+        
         if "Prx_p5_dBm" in df.columns:
-            mask &= df["Prx_p5_dBm"].between(PRX_MIN, PRX_MAX)
+            prx_mask = df["Prx_p5_dBm"].between(PRX_MIN, PRX_MAX)
+            filter_reasons["Prx_p5_dBm out of bounds"] = (~prx_mask).sum()
+            mask &= prx_mask
         
         if "SINR_p5_dB" in df.columns:
-            mask &= df["SINR_p5_dB"].between(SINR_MIN, SINR_MAX)
+            sinr_mask = df["SINR_p5_dB"].between(SINR_MIN, SINR_MAX)
+            filter_reasons["SINR_p5_dB out of bounds"] = (~sinr_mask).sum()
+            mask &= sinr_mask
         
         if "rx_power_coverage_ratio" in df.columns:
-            mask &= df["rx_power_coverage_ratio"].between(0.0, 1.0)
+            cov_mask = df["rx_power_coverage_ratio"].between(0.0, 1.0)
+            filter_reasons["rx_power_coverage_ratio out of bounds"] = (~cov_mask).sum()
+            mask &= cov_mask
         
         for i in range(4):
             col = f"tx{i}_served_pct"
             if col in df.columns:
-                mask &= df[col].between(0.0, 100.0)
+                served_mask = df[col].between(0.0, 100.0)
+                filter_reasons[f"{col} out of bounds"] = (~served_mask).sum()
+                mask &= served_mask
         
         # Check for throughput column
         if self.throughput_col and self.throughput_col in df.columns:
-            mask &= df[self.throughput_col].between(THR_MIN, THR_MAX)
+            thr_mask = df[self.throughput_col].between(THR_MIN, THR_MAX)
+            filter_reasons[f"{self.throughput_col} out of bounds"] = (~thr_mask).sum()
+            mask &= thr_mask
         
         # Drop rows with NaN in any target
         required_targets = [c for c in self.target_cols if c in df.columns]
-        mask &= df[required_targets].notna().all(axis=1)
+        nan_mask = df[required_targets].notna().all(axis=1)
+        filter_reasons["NaN in targets"] = (~nan_mask).sum()
+        mask &= nan_mask
         
-        return df.loc[mask].reset_index(drop=True)
+        # Apply final mask
+        df_clean = df.loc[mask].reset_index(drop=True)
+        
+        # Print detailed cleaning report
+        print("\n=== Data Cleaning Report ===")
+        print(f"Initial rows: {initial_count:,}")
+        if sentinel_removed > 0:
+            print(f"  Removed sentinel values: {sentinel_removed:,}")
+        for reason, count in filter_reasons.items():
+            if count > 0:
+                print(f"  {reason}: {count:,}")
+        print(f"Final valid rows: {len(df_clean):,} ({len(df_clean)/initial_count*100:.2f}%)")
+        print(f"Total removed: {initial_count - len(df_clean):,} ({(initial_count - len(df_clean))/initial_count*100:.2f}%)")
+        print("=" * 30)
+        
+        return df_clean
     
     def _compute_param_ranges(self, df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
         """Compute parameter ranges from dataset."""
@@ -230,7 +298,7 @@ class SurrogateTrainer:
             sample_cols = sample_df.columns.tolist()
         
         # Check for throughput column variants
-        thr_variants = ["ThrRR_p5", "Thr_p5_Mbps", "throughput_p5", "thr_rr_p5"]
+        thr_variants = ["ThrRR_p5_Mbps", "ThrRR_p5", "Thr_p5_Mbps", "throughput_p5", "thr_rr_p5"]
         for variant in thr_variants:
             if variant in sample_cols:
                 self.throughput_col = variant
@@ -305,10 +373,12 @@ class SurrogateTrainer:
         print("Sanitizing TX parameters...")
         df = self._sanitize_tx_params(df)
         
+        # Engineer features
+        print("Engineering features (interactions, statistics)...")
+        df = self._engineer_features(df)
+        
         # Clean targets
-        print("Cleaning target values...")
         df = self._clean_targets(df)
-        print(f"After cleaning: {len(df):,} valid rows")
         
         # Compute parameter ranges
         self.param_ranges = self._compute_param_ranges(df)
@@ -321,13 +391,42 @@ class SurrogateTrainer:
         return df
     
     def train_models(self, df: pd.DataFrame) -> None:
-        """Train separate regression models for each KPI target."""
+        """Train separate regression models for each KPI target with train/val split."""
         print("\nTraining surrogate models...")
         
-        X = df[self.feature_cols].values.astype(np.float32)
+        # Use all available features (base + engineered)
+        engineered_features = [
+            "avg_power", "power_std", "avg_azimuth", "avg_elevation",
+            "azimuth_range", "elevation_range", "n_active_tx", "azimuth_uniformity"
+        ]
+        
+        # Add interaction features
+        for i in range(4):
+            engineered_features.extend([
+                f"tx{i}_P_x_Az", f"tx{i}_P_x_El", f"tx{i}_Az_x_El"
+            ])
+        
+        # Combine base + engineered features
+        all_features = self.feature_cols + [f for f in engineered_features if f in df.columns]
+        self.feature_names = all_features
+        
+        X = df[all_features].values.astype(np.float32)
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
         
-        print(f"Feature matrix shape: {X.shape}")
+        print(f"Feature matrix shape: {X.shape} (base: {len(self.feature_cols)}, engineered: {len(all_features) - len(self.feature_cols)})")
+        
+        # Train/validation split (90/10)
+        n_train = int(len(X) * 0.9)
+        indices = np.arange(len(X))
+        self.rng.shuffle(indices)
+        
+        train_idx = indices[:n_train]
+        val_idx = indices[n_train:]
+        
+        X_train = X[train_idx]
+        X_val = X[val_idx]
+        
+        print(f"Train size: {len(X_train):,}, Validation size: {len(X_val):,}")
         
         # Train separate model for each target
         for target in self.target_cols:
@@ -338,58 +437,90 @@ class SurrogateTrainer:
             y = df[target].values.astype(np.float32)
             y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
             
+            y_train = y[train_idx]
+            y_val = y[val_idx]
+            
             # Choose model based on availability
             if HAS_LIGHTGBM:
                 params = {
                     'objective': 'regression',
                     'metric': 'rmse',
                     'boosting_type': 'gbdt',
-                    'num_leaves': 31,
-                    'learning_rate': 0.05,
+                    'num_leaves': 127,  # Increased from 63
+                    'max_depth': 12,     # Added explicit depth
+                    'learning_rate': 0.03,  # Slightly lower for better convergence
                     'feature_fraction': 0.9,
                     'bagging_fraction': 0.8,
                     'bagging_freq': 5,
+                    'min_data_in_leaf': 50,
+                    'lambda_l1': 0.1,    # Regularization
+                    'lambda_l2': 0.1,
                     'verbose': -1,
                     'random_state': self.random_seed,
                 }
                 
-                train_data = lgb.Dataset(X, label=y)
+                train_data = lgb.Dataset(X_train, label=y_train)
+                val_data = lgb.Dataset(X_val, label=y_val, reference=train_data)
+                
+                # Train with early stopping
+                callbacks = [
+                    lgb.early_stopping(stopping_rounds=50, verbose=False),
+                    lgb.log_evaluation(period=100)
+                ]
+                
                 model = lgb.train(
                     params,
                     train_data,
-                    num_boost_round=100,
-                    valid_sets=[train_data],
-                    valid_names=['train'],
+                    num_boost_round=1000,
+                    valid_sets=[train_data, val_data],
+                    valid_names=['train', 'valid'],
+                    callbacks=callbacks,
                 )
                 
             elif HAS_XGBOOST:
                 model = xgb.XGBRegressor(
-                    n_estimators=100,
-                    max_depth=6,
+                    n_estimators=1000,
+                    max_depth=8,
                     learning_rate=0.05,
                     subsample=0.8,
                     colsample_bytree=0.9,
                     random_state=self.random_seed,
                     n_jobs=-1,
+                    early_stopping_rounds=50,
                 )
-                model.fit(X, y)
+                model.fit(
+                    X_train, y_train,
+                    eval_set=[(X_train, y_train), (X_val, y_val)],
+                    verbose=False,
+                )
                 
             else:
                 # Fallback to sklearn
                 model = HistGradientBoostingRegressor(
-                    max_iter=100,
-                    max_depth=6,
+                    max_iter=1000,
+                    max_depth=8,
                     learning_rate=0.05,
                     random_state=self.random_seed,
+                    early_stopping=True,
+                    validation_fraction=0.1,
                 )
-                model.fit(X, y)
+                model.fit(X_train, y_train)
             
             self.models[target] = model
             
-            # Quick validation
-            y_pred = self._predict_single_model(model, X[:1000])
-            mae = np.mean(np.abs(y_pred - y[:1000]))
-            print(f"  Model trained. Sample MAE on first 1000 rows: {mae:.4f}")
+            # Validation metrics
+            y_pred_train = self._predict_single_model(model, X_train[:5000])
+            mae_train = np.mean(np.abs(y_pred_train - y_train[:5000]))
+            
+            y_pred_val = self._predict_single_model(model, X_val[:5000])
+            mae_val = np.mean(np.abs(y_pred_val - y_val[:5000]))
+            
+            print(f"  ✓ Model trained.")
+            print(f"    Train MAE: {mae_train:.4f}")
+            print(f"    Val MAE:   {mae_val:.4f}")
+            
+            if mae_val > mae_train * 2.0:
+                print(f"    ⚠ Warning: Validation error is 2x train error (possible overfitting)")
         
         print(f"\nTrained {len(self.models)} models successfully")
     
@@ -404,16 +535,18 @@ class SurrogateTrainer:
         """Save trained models and metadata."""
         artifact = {
             "feature_cols": self.feature_cols,
+            "feature_names": self.feature_names,  # Save all feature names
             "target_cols": self.target_cols,
             "models": self.models,
             "param_ranges": self.param_ranges,
             "bw_hz": BW_HZ_DEFAULT,
             "has_throughput_col": self.has_throughput_col,
             "throughput_col": self.throughput_col,
-            "version": "2.0",
+            "version": "2.1",
             "notes": (
-                "Surrogate models trained with LightGBM/XGBoost. "
+                "Surrogate models trained with LightGBM/XGBoost + feature engineering. "
                 "Predicts: Prx_p5_dBm, SINR_p5_dB, rx_power_coverage_ratio, tx*_served_pct. "
+                "Features include interactions (power*angle) and statistics. "
                 "LOAD_IMBALANCE computed from served_pct at inference. "
                 "Throughput computed from SINR via Shannon if not in dataset."
             ),
