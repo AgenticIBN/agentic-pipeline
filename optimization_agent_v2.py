@@ -310,14 +310,6 @@ class OptimizationAgent:
         seed_configs.append(self._generate_extreme_config("neg_angles"))  # Negative angles
         seed_configs.append(self._generate_extreme_config("pos_angles"))  # Positive angles
         
-        # Debug: Print seed configs
-        print(f"Generated {len(seed_configs)} seed configs for exploration:")
-        for i, seed in enumerate(seed_configs):
-            seed_kpis = self._compute_kpis(seed, context)
-            print(f"  Seed {i}: RX_POWER={seed_kpis.get('Prx_p5_dBm', 0):.2f} dBm, "
-                  f"TX0[P={seed.get('tx0_P_dBm', 0):.1f}, Az={seed.get('tx0_dAz', 0):.1f}, El={seed.get('tx0_dEl', 0):.1f}]")
-        print()
-        
         # Search from each seed
         for seed_config in seed_configs:
             # Evaluate seed
@@ -369,11 +361,6 @@ class OptimizationAgent:
                         best_config = dict(candidate)
                         best_kpis = kpis
                         search_stats["best_score_found"] = score
-        
-        # Print search statistics
-        print(f"Search completed: {search_stats['total_evaluated']} configs evaluated, "
-              f"{search_stats['constraints_satisfied']} satisfied constraints")
-        print(f"Best score found: {search_stats['best_score_found']:.2f}")
         
         # If no valid config found, use best seed
         if best_config is None:
@@ -484,10 +471,6 @@ class OptimizationAgent:
         
         # Check for DELTA_DOWN intent to determine optimization direction
         has_delta_down = any(thr.get("op") == "DELTA_DOWN" or thr.get("operator") == "DELTA_DOWN" for thr in kpi_thresholds)
-        
-        # Debug: print if DELTA_DOWN detected
-        if has_delta_down and "RX_POWER" in target_kpis:
-            print(f"🔽 DELTA_DOWN detected - optimizing for LOWER power")
         
         # Reward target KPIs (reverse direction if DELTA_DOWN)
         if "RX_POWER" in target_kpis and "Prx_p5_dBm" in kpis:

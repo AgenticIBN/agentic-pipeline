@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-AgentOS Workflow Pipeline
-Complete 6G Network Optimization Pipeline using AgentOS Workflow
+AgentOS Workflow Pipeline (Full Agent-Based)
+Complete 6G Network Optimization Pipeline using AgentOS Workflow with ALL agents
 
-Architecture:
-1. Intent Parser Agent → Parse natural language intent
-2. Optimization Agent V2 → Generate optimal configuration
-3. Conflict Detector Agent → Detect conflicts with active intents
-4. Resolution Agent → Resolve conflicts (Priority or Weighted Merge)
+Architecture (ALL Agent-Based):
+1. Intent Parser Agent → Parse natural language intent (Agno Agent)
+2. Optimization Agent → Generate optimal configuration (Agno Agent)
+3. Conflict Detector Agent → Detect conflicts with active intents (Agno Agent)
+4. Resolution Agent → Resolve conflicts - Priority or Weighted Merge (Agno Agent)
 5. Final Output → Combined configuration and execution log
+
+All components now use Agno Agent structure with LLM reasoning!
 
 Run: python agno_workflow_pipeline.py --playground
 Open: http://localhost:7777 → Workflows tab
@@ -33,11 +35,12 @@ from agno.models.groq import Groq
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "intent_parser"))
 from intent_parser.intent_parser_agent import intent_parser_agent, IntentParse
 
-# Import helper modules
-from optimization_agent_v2 import OptimizationAgent
-from conflict_detector_agent import detect_conflicts
-from priority_based_resolution_agent import resolve_by_priority, PriorityBasedResolutionOutput
-from weighted_merge_resolution_agent import resolve_by_weighted_merge, WeightedMergeOutput
+# Import new Agno-based agents
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "agents"))
+from agents.optimization_agent import run_optimization
+from agents.conflict_detector_agent import run_conflict_detection
+from agents.priority_resolution_agent import run_priority_resolution
+from agents.weighted_merge_agent import run_weighted_merge
 
 load_dotenv()
 
@@ -108,6 +111,90 @@ def add_active_intent(result: dict) -> None:
     active.append(result)
     save_active_intents(active)
 
+def get_current_system_config() -> dict:
+    """
+    Get the current system configuration from the last finalized intent.
+    If no active intents exist, return default configuration.
+    
+    Returns:
+        Current configuration dict with tx parameters
+    """
+    active_intents = load_active_intents()
+    
+    if not active_intents:
+        # No active intents - return default baseline configuration
+        print("📌 No active intents found - using default baseline config")
+        return {
+            'tx0_on': True, 'tx0_P_dBm': 30.0, 'tx0_dAz': 0.0, 'tx0_dEl': 0.0,
+            'tx1_on': True, 'tx1_P_dBm': 30.0, 'tx1_dAz': 0.0, 'tx1_dEl': 0.0,
+            'tx2_on': True, 'tx2_P_dBm': 30.0, 'tx2_dAz': 0.0, 'tx2_dEl': 0.0,
+            'tx3_on': True, 'tx3_P_dBm': 30.0, 'tx3_dAz': 0.0, 'tx3_dEl': 0.0
+        }
+    
+    # Get the last active intent (most recent)
+    last_intent = active_intents[-1]
+    
+    # Extract final configuration from the last intent
+    config = extract_final_config_from_result(last_intent)
+    
+    print(f"📌 Loaded current config from last intent (ID: {last_intent.get('result_id', 'N/A')})")
+    return config
+
+def extract_final_config_from_result(result: dict) -> dict:
+    """
+    Extract the final configuration from an optimization result.
+    Reconstructs the full config by applying changes to base config.
+    
+    Args:
+        result: Optimization result dict
+    
+    Returns:
+        Complete configuration dict
+    """
+    # Try to get output section
+    output = result.get('output', {})
+    
+    # Get changes list
+    changes = output.get('changes', [])
+    
+    # Start with default config (or stored final if available)
+    if 'final_config' in result:
+        return result['final_config']
+    
+    # Reconstruct from changes
+    input_data = result.get('input', {})
+    base_config = input_data.get('current_config', {})
+    
+    if not base_config:
+        # Use default
+        base_config = {
+            'tx0_on': True, 'tx0_P_dBm': 30.0, 'tx0_dAz': 0.0, 'tx0_dEl': 0.0,
+            'tx1_on': True, 'tx1_P_dBm': 30.0, 'tx1_dAz': 0.0, 'tx1_dEl': 0.0,
+            'tx2_on': True, 'tx2_P_dBm': 30.0, 'tx2_dAz': 0.0, 'tx2_dEl': 0.0,
+            'tx3_on': True, 'tx3_P_dBm': 30.0, 'tx3_dAz': 0.0, 'tx3_dEl': 0.0
+        }
+    
+    # Apply changes to base config
+    final_config = dict(base_config)
+    
+    for change in changes:
+        param = change.get('param')
+        change_val = change.get('change')
+        before = change.get('before')
+        
+        if param and change_val is not None:
+            # For boolean params (tx_on), change is the new value
+            if param.endswith('_on'):
+                final_config[param] = bool(change_val)
+            # For numeric params, change is delta
+            elif before is not None:
+                final_config[param] = float(before) + float(change_val)
+            else:
+                # No before value, treat change as absolute
+                final_config[param] = float(change_val)
+    
+    return final_config
+
 
 # ============================================================================
 # WORKFLOW STEP 1: INTENT PARSING
@@ -177,7 +264,7 @@ def step_1_parse_intent(step_input) -> PipelineState:
 
 def step_2_optimize_configuration(step_input) -> PipelineState:
     """
-    Step 2: Generate optimal configuration using Optimization Agent V2
+    Step 2: Generate optimal configuration using Optimization Agent (Agno-based)
     
     Input: PipelineState with parsed_intent
     Output: PipelineState with optimization_result
@@ -185,25 +272,13 @@ def step_2_optimize_configuration(step_input) -> PipelineState:
     state = step_input.input if hasattr(step_input, 'input') else step_input
     
     print("\n" + "="*70)
-    print("🔧 STEP 2: CONFIGURATION OPTIMIZATION")
+    print("🔧 STEP 2: CONFIGURATION OPTIMIZATION (Agent-based)")
     print("="*70)
     
     if not state.parsed_intent:
         raise ValueError("No parsed intent available for optimization")
     
     try:
-        # Initialize optimization agent
-        surrogate_path = "models/surrogate.joblib"
-        if not os.path.exists(surrogate_path):
-            raise FileNotFoundError(f"Surrogate model not found at {surrogate_path}")
-        
-        # Load surrogate model first
-        from optimization_agent_v2 import SurrogateModel
-        surrogate = SurrogateModel.load(surrogate_path)
-        
-        # Initialize optimization agent with loaded surrogate
-        opt_agent = OptimizationAgent(surrogate=surrogate)
-        
         # Convert parsed intent to optimization input
         if hasattr(state.parsed_intent, 'model_dump'):
             intent_dict = state.parsed_intent.model_dump()
@@ -212,37 +287,95 @@ def step_2_optimize_configuration(step_input) -> PipelineState:
         else:
             intent_dict = dict(state.parsed_intent)
         
-        # Add default current_config if not present
-        if 'current_config' not in intent_dict or not intent_dict['current_config']:
-            # Default TX configuration (baseline) - matches surrogate model parameters
-            intent_dict['current_config'] = {
-                'tx0_on': True, 'tx0_P_dBm': 30.0, 'tx0_dAz': 0.0, 'tx0_dEl': 0.0,
-                'tx1_on': True, 'tx1_P_dBm': 30.0, 'tx1_dAz': 0.0, 'tx1_dEl': 0.0,
-                'tx2_on': True, 'tx2_P_dBm': 30.0, 'tx2_dAz': 0.0, 'tx2_dEl': 0.0,
-                'tx3_on': True, 'tx3_P_dBm': 30.0, 'tx3_dAz': 0.0, 'tx3_dEl': 0.0
-            }
+        # Get current system configuration (from last finalized intent or default)
+        current_config = get_current_system_config()
+        intent_dict['current_config'] = current_config
         
-        # Run optimization
-        result = opt_agent.optimize(intent_dict)
-        state.optimization_result = result
+        # Load surrogate model to compute current KPIs
+        surrogate_path = "models/surrogate.joblib"
+        if not os.path.exists(surrogate_path):
+            raise FileNotFoundError(f"Surrogate model not found at {surrogate_path}")
+        
+        from optimization_agent_v2 import SurrogateModel
+        surrogate = SurrogateModel.load(surrogate_path)
+        
+        # Compute current KPIs
+        context = {
+            "user_set_id": 0,
+            "K_users": 800,
+            "rx_power_thr_dBm": -95.0,
+            "total_tx_power_watt": 0.0,
+        }
+        current_kpis = surrogate.predict(current_config, context)
+        
+        # Compute throughput if needed
+        if "SINR_p5_dB" in current_kpis:
+            if surrogate.has_throughput_col and surrogate.throughput_col in current_kpis:
+                throughput = current_kpis[surrogate.throughput_col]
+            else:
+                throughput = surrogate.compute_throughput_from_sinr(current_kpis["SINR_p5_dB"])
+            current_kpis["THROUGHPUT_5P"] = throughput
+        
+        print(f"\n📊 Current System State:")
+        print(f"   Configuration:")
+        print(f"      TX0: {'ON' if current_config['tx0_on'] else 'OFF'} | P={current_config['tx0_P_dBm']:.1f}dBm | Az={current_config['tx0_dAz']:.1f}° | El={current_config['tx0_dEl']:.1f}°")
+        print(f"      TX1: {'ON' if current_config['tx1_on'] else 'OFF'} | P={current_config['tx1_P_dBm']:.1f}dBm | Az={current_config['tx1_dAz']:.1f}° | El={current_config['tx1_dEl']:.1f}°")
+        print(f"      TX2: {'ON' if current_config['tx2_on'] else 'OFF'} | P={current_config['tx2_P_dBm']:.1f}dBm | Az={current_config['tx2_dAz']:.1f}° | El={current_config['tx2_dEl']:.1f}°")
+        print(f"      TX3: {'ON' if current_config['tx3_on'] else 'OFF'} | P={current_config['tx3_P_dBm']:.1f}dBm | Az={current_config['tx3_dAz']:.1f}° | El={current_config['tx3_dEl']:.1f}°")
+        print(f"   Current KPIs:")
+        print(f"      RX_POWER:     {current_kpis.get('Prx_p5_dBm', 0):.2f} dBm")
+        print(f"      SINR:         {current_kpis.get('SINR_p5_dB', 0):.2f} dB")
+        print(f"      THROUGHPUT:   {current_kpis.get('THROUGHPUT_5P', 0):.2f} Mbps")
+        if 'rx_power_coverage_ratio' in current_kpis:
+            print(f"      COVERAGE:     {current_kpis.get('rx_power_coverage_ratio', 0):.2%}")
+        
+        # Add test_name if not present
+        if 'test_name' not in intent_dict:
+            intent_dict['test_name'] = f"optimization_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Add k_users and user_set_id if not present
+        intent_dict.setdefault('k_users', 800)
+        intent_dict.setdefault('user_set_id', 0)
+        
+        # Run optimization using Agno-based agent
+        print(f"\n🔍 Running optimization from current state...")
+        result = run_optimization(intent_dict, surrogate_model_path=surrogate_path)
+        
+        # Convert OptimizationResult to dict for state storage
+        if hasattr(result, 'model_dump'):
+            result_dict = result.model_dump()
+        else:
+            result_dict = dict(result)
+        
+        state.optimization_result = result_dict
         state.current_step = "OPTIMIZED"
-        state.execution_log.append(f"✅ Optimization completed")
+        state.execution_log.append(f"✅ Optimization completed (Agent-based)")
         
-        print(f"\n✅ Optimization Result:")
-        print(f"   Result ID: {result.get('result_id', 'N/A')}")
-        print(f"   Status: {result.get('status', 'N/A')}")
+        print(f"\n✅ Optimization Result (from Agent):")
+        print(f"   Result ID: {result_dict.get('result_id', 'N/A')}")
+        print(f"   Priority: {result_dict.get('priority', 'N/A')}")
+        print(f"   Passed: {result_dict.get('passed', 'N/A')}")
         
-        if 'config_changes' in result:
-            changes = result['config_changes']
-            print(f"   Configuration Changes ({len(changes)}):")
-            for param, change in list(changes.items())[:5]:  # Show first 5
-                print(f"      - {param}: {change:.4f}")
+        if result.reasoning:
+            print(f"\n📝 Agent Reasoning:")
+            print(f"   {result.reasoning}")
         
-        if 'predicted_kpis' in result:
-            kpis = result['predicted_kpis']
-            print(f"   Predicted KPIs:")
+        output = result_dict.get('output', {})
+        if 'changes' in output:
+            changes = output['changes']
+            print(f"\n   Configuration Changes ({len(changes)}):")
+            for change in changes[:5]:  # Show first 5
+                param = change.get('param')
+                change_val = change.get('change')
+                unit = change.get('unit', '')
+                print(f"      - {param}: {change_val} {unit}")
+        
+        if 'expected_kpis' in output:
+            kpis = output['expected_kpis']
+            print(f"\n   Expected KPIs:")
             for kpi, value in kpis.items():
-                print(f"      - {kpi}: {value:.4f}")
+                if value is not None:
+                    print(f"      - {kpi}: {value:.4f}")
         
     except Exception as e:
         state.execution_log.append(f"❌ Optimization failed: {str(e)}")
@@ -258,7 +391,7 @@ def step_2_optimize_configuration(step_input) -> PipelineState:
 
 def step_3_detect_conflicts(step_input) -> PipelineState:
     """
-    Step 3: Detect conflicts with active intents using Conflict Detector Agent
+    Step 3: Detect conflicts with active intents using Conflict Detector Agent (Agno-based)
     
     Input: PipelineState with optimization_result
     Output: PipelineState with conflict_report
@@ -266,7 +399,7 @@ def step_3_detect_conflicts(step_input) -> PipelineState:
     state = step_input.input if hasattr(step_input, 'input') else step_input
     
     print("\n" + "="*70)
-    print("🔍 STEP 3: CONFLICT DETECTION")
+    print("🔍 STEP 3: CONFLICT DETECTION (Agent-based)")
     print("="*70)
     
     if not state.optimization_result:
@@ -277,30 +410,46 @@ def step_3_detect_conflicts(step_input) -> PipelineState:
         active_results = load_active_intents()
         print(f"Active intents count: {len(active_results)}")
         
-        # Detect conflicts using the function (not a class)
-        conflict_report = detect_conflicts(
+        # Run conflict detection using Agno-based agent
+        conflict_analysis = run_conflict_detection(
             new_result=state.optimization_result,
             active_results=active_results
         )
         
-        # Convert ConflictReport to dict
-        state.conflict_report = conflict_report.model_dump()
-        state.has_conflict = conflict_report.is_conflicted
+        # Convert ConflictAnalysis to dict for state storage
+        if hasattr(conflict_analysis, 'model_dump'):
+            analysis_dict = conflict_analysis.model_dump()
+        else:
+            analysis_dict = dict(conflict_analysis)
+        
+        state.conflict_report = analysis_dict
+        state.has_conflict = conflict_analysis.is_conflicted
         state.current_step = "CONFLICT_CHECKED"
         
         if state.has_conflict:
-            state.execution_log.append(f"⚠️  Conflicts detected: {conflict_report.num_conflicts}")
-            print(f"\n⚠️  CONFLICTS DETECTED!")
-            print(f"   Number of conflicts: {conflict_report.num_conflicts}")
-            print(f"   Summary: {conflict_report.conflict_summary}")
+            state.execution_log.append(f"⚠️  Conflicts detected: {conflict_analysis.num_conflicts} (Agent-based)")
+            print(f"\n⚠️  CONFLICTS DETECTED (by Agent)!")
+            print(f"   Number of conflicts: {conflict_analysis.num_conflicts}")
+            print(f"   Summary: {conflict_analysis.conflict_summary}")
             
-            if conflict_report.details:
-                print(f"   Conflict Details:")
-                for i, detail in enumerate(conflict_report.details[:3], 1):  # Show first 3
+            if conflict_analysis.reasoning:
+                print(f"\n📝 Agent Reasoning:")
+                print(f"   {conflict_analysis.reasoning}")
+            
+            if conflict_analysis.details:
+                print(f"\n   Conflict Details:")
+                for i, detail in enumerate(conflict_analysis.details[:3], 1):  # Show first 3
                     print(f"      {i}. {detail.conflict_type} - {detail.description}")
+            
+            if conflict_analysis.resolution_recommendation:
+                print(f"\n💡 Recommended Strategy: {conflict_analysis.resolution_recommendation}")
         else:
-            state.execution_log.append(f"✅ No conflicts detected")
+            state.execution_log.append(f"✅ No conflicts detected (Agent-based)")
             print(f"\n✅ NO CONFLICTS - Configuration can be applied directly")
+            
+            if conflict_analysis.reasoning:
+                print(f"\n📝 Agent Reasoning:")
+                print(f"   {conflict_analysis.reasoning}")
         
     except Exception as e:
         state.execution_log.append(f"❌ Conflict detection failed: {str(e)}")
@@ -316,7 +465,7 @@ def step_3_detect_conflicts(step_input) -> PipelineState:
 
 def step_4_resolve_conflicts(step_input) -> PipelineState:
     """
-    Step 4: Resolve conflicts using selected strategy (PRIORITY or WEIGHTED_MERGE)
+    Step 4: Resolve conflicts using selected strategy (PRIORITY or WEIGHTED_MERGE) - Agent-based
     
     Input: PipelineState with conflict_report
     Output: PipelineState with resolution_output
@@ -324,7 +473,7 @@ def step_4_resolve_conflicts(step_input) -> PipelineState:
     state = step_input.input if hasattr(step_input, 'input') else step_input
     
     print("\n" + "="*70)
-    print("⚖️  STEP 4: CONFLICT RESOLUTION")
+    print("⚖️  STEP 4: CONFLICT RESOLUTION (Agent-based)")
     print("="*70)
     
     # Skip if no conflicts
@@ -342,41 +491,63 @@ def step_4_resolve_conflicts(step_input) -> PipelineState:
         
         print(f"Resolution Strategy: {state.resolution_strategy}")
         
-        # Apply resolution based on strategy
+        # Apply resolution based on strategy using Agno-based agents
         if state.resolution_strategy == "PRIORITY":
-            resolution = resolve_by_priority(
+            resolution = run_priority_resolution(
                 conflict_report=state.conflict_report,
                 new_result=state.optimization_result,
                 active_results=active_results
             )
-            state.resolution_output = resolution.model_dump()
             
-            print(f"\n✅ Priority-Based Resolution:")
+            # Convert to dict for state storage
+            if hasattr(resolution, 'model_dump'):
+                resolution_dict = resolution.model_dump()
+            else:
+                resolution_dict = dict(resolution)
+            
+            state.resolution_output = resolution_dict
+            
+            print(f"\n✅ Priority-Based Resolution (by Agent):")
             print(f"   Winning Result: {resolution.winning_result_id}")
             print(f"   Winning Priority: {resolution.winning_priority}")
             print(f"   Rejected Results: {len(resolution.rejected_result_ids)}")
             print(f"   Notes: {resolution.resolution_notes}")
             
+            if resolution.reasoning:
+                print(f"\n📝 Agent Reasoning:")
+                print(f"   {resolution.reasoning}")
+            
         else:  # WEIGHTED_MERGE
-            resolution = resolve_by_weighted_merge(
+            resolution = run_weighted_merge(
                 conflict_report=state.conflict_report,
                 new_result=state.optimization_result,
                 active_results=active_results
             )
-            state.resolution_output = resolution.model_dump()
             
-            print(f"\n✅ Weighted Merge Resolution:")
+            # Convert to dict for state storage
+            if hasattr(resolution, 'model_dump'):
+                resolution_dict = resolution.model_dump()
+            else:
+                resolution_dict = dict(resolution)
+            
+            state.resolution_output = resolution_dict
+            
+            print(f"\n✅ Weighted Merge Resolution (by Agent):")
             print(f"   Merged Result ID: {resolution.merged_result_id}")
             print(f"   Contributing Results: {len(resolution.contributing_results)}")
             print(f"   Notes: {resolution.resolution_notes}")
             
+            if resolution.reasoning:
+                print(f"\n📝 Agent Reasoning:")
+                print(f"   {resolution.reasoning}")
+            
             if resolution.merge_details:
-                print(f"   Merge Details (sample):")
+                print(f"\n   Merge Details (sample):")
                 for detail in resolution.merge_details[:3]:  # Show first 3
                     print(f"      - {detail.get('parameter')}: {detail.get('merged_value')}")
         
         state.current_step = "RESOLVED"
-        state.execution_log.append(f"✅ Conflicts resolved using {state.resolution_strategy}")
+        state.execution_log.append(f"✅ Conflicts resolved using {state.resolution_strategy} (Agent-based)")
         
     except Exception as e:
         state.execution_log.append(f"❌ Conflict resolution failed: {str(e)}")
@@ -420,10 +591,23 @@ def step_5_finalize_configuration(step_input) -> PipelineState:
             state.final_configuration = state.optimization_result
             print(f"Using optimization result directly (no conflicts)")
         
-        # Add to active intents
+        # Extract and store final config for next intent
         if state.final_configuration:
+            # Extract the actual configuration parameters
+            final_config = extract_final_config_from_result(state.final_configuration)
+            
+            # Store it in the result for easy access
+            state.final_configuration['final_config'] = final_config
+            
+            # Add to active intents (this becomes the current config for next intent)
             add_active_intent(state.final_configuration)
-            print(f"✅ Configuration added to active intents")
+            
+            print(f"\n✅ Configuration added to active intents")
+            print(f"\n📊 New System State (will be used for next intent):")
+            print(f"   TX0: {'ON' if final_config['tx0_on'] else 'OFF'} | P={final_config['tx0_P_dBm']:.1f}dBm | Az={final_config['tx0_dAz']:.1f}° | El={final_config['tx0_dEl']:.1f}°")
+            print(f"   TX1: {'ON' if final_config['tx1_on'] else 'OFF'} | P={final_config['tx1_P_dBm']:.1f}dBm | Az={final_config['tx1_dAz']:.1f}° | El={final_config['tx1_dEl']:.1f}°")
+            print(f"   TX2: {'ON' if final_config['tx2_on'] else 'OFF'} | P={final_config['tx2_P_dBm']:.1f}dBm | Az={final_config['tx2_dAz']:.1f}° | El={final_config['tx2_dEl']:.1f}°")
+            print(f"   TX3: {'ON' if final_config['tx3_on'] else 'OFF'} | P={final_config['tx3_P_dBm']:.1f}dBm | Az={final_config['tx3_dAz']:.1f}° | El={final_config['tx3_dEl']:.1f}°")
         
         state.current_step = "COMPLETED"
         state.execution_log.append(f"✅ Workflow completed successfully")
@@ -563,15 +747,79 @@ if __name__ == "__main__":
         try:
             result = optimization_workflow.run(input=initial_state)
             
-            # Save result to file
+            # Extract the final state from workflow result
+            if hasattr(result, 'input') and isinstance(result.input, PipelineState):
+                final_state = result.input
+            else:
+                final_state = initial_state
+            
+            # Create a clean, readable summary
+            summary = {
+                "workflow_id": final_state.workflow_id,
+                "timestamp": final_state.timestamp,
+                "status": final_state.current_step,
+                "intent": {
+                    "natural_language": final_state.natural_language_intent,
+                    "priority": final_state.parsed_intent.priority if final_state.parsed_intent else None,
+                    "target_area": final_state.parsed_intent.target_area if final_state.parsed_intent else None,
+                    "target_kpis": final_state.parsed_intent.target_kpis if final_state.parsed_intent else None,
+                    "time_constraint": {
+                        "start": final_state.parsed_intent.time_constraint_start if final_state.parsed_intent else None,
+                        "end": final_state.parsed_intent.time_constraint_end if final_state.parsed_intent else None
+                    }
+                },
+                "optimization": None,
+                "conflicts": None,
+                "resolution": None,
+                "final_configuration": None,
+                "execution_log": final_state.execution_log
+            }
+            
+            # Add optimization results if available
+            if final_state.optimization_result:
+                opt = final_state.optimization_result
+                if isinstance(opt, dict) and 'output' in opt:
+                    summary["optimization"] = {
+                        "config_id": opt['output'].get('selected_config_id'),
+                        "changes": opt['output'].get('changes', []),
+                        "expected_kpis": opt['output'].get('expected_kpis', {}),
+                        "current_kpis": opt['output'].get('current_kpis', {}),
+                        "constraints_satisfied": opt['output'].get('constraints_satisfied', False)
+                    }
+            
+            # Add conflict information if available
+            if final_state.conflict_report:
+                summary["conflicts"] = {
+                    "is_conflicted": final_state.conflict_report.get('is_conflicted', False),
+                    "num_conflicts": final_state.conflict_report.get('num_conflicts', 0),
+                    "summary": final_state.conflict_report.get('conflict_summary', ''),
+                    "conflicting_ids": final_state.conflict_report.get('conflicting_result_ids', [])
+                }
+            
+            # Add resolution information if available
+            if final_state.resolution_output:
+                res = final_state.resolution_output
+                if isinstance(res, dict):
+                    summary["resolution"] = {
+                        "strategy": final_state.resolution_strategy,
+                        "selected_config_id": res.get('selected_config_id'),
+                        "reasoning": res.get('reasoning', '')
+                    }
+            
+            # Add final configuration
+            if final_state.final_configuration:
+                final_config = final_state.final_configuration
+                if isinstance(final_config, dict) and 'output' in final_config:
+                    summary["final_configuration"] = {
+                        "config_id": final_config['output'].get('selected_config_id'),
+                        "changes": final_config['output'].get('changes', []),
+                        "expected_kpis": final_config['output'].get('expected_kpis', {})
+                    }
+            
+            # Save clean summary to file
             result_file = f"workflow_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             with open(result_file, 'w') as f:
-                # Convert to dict for JSON serialization
-                if hasattr(result, 'model_dump'):
-                    result_dict = result.model_dump()
-                else:
-                    result_dict = result
-                json.dump(result_dict, f, indent=2, default=str)
+                json.dump(summary, f, indent=2, default=str)
             
             print(f"\n✅ Workflow completed successfully!")
             print(f"📁 Result saved to: {result_file}")
