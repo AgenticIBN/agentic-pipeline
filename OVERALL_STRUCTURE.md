@@ -305,11 +305,6 @@ lgb_params = {
 #### 4. Eğitimi Çalıştırma
 
 ```bash
-# Tam dataset ile eğit (önerilen)
-python3 train_surrogate_v2.py --sample-size 1000000
-
-# Hızlı test için küçük dataset
-python3 train_surrogate_v2.py --sample-size 10000
 
 # Tüm veriyi kullan (çok büyük dataset için)
 python3 train_surrogate_v2.py
@@ -550,14 +545,14 @@ echo "GROQ_API_KEY=your_groq_api_key_here" > .env
 
 ```bash
 # Modeli eğit (simulator verisi gerekli)
-python3 train_surrogate_v2.py --sample-size 1000000
+python3 train_surrogate_v2.py
 
 # Model models/surrogate.joblib olarak kaydedilir
 ```
 
 **Not:** Eğer simulator veriniz yoksa, mevcut `models/surrogate.joblib` dosyasını kullanabilirsiniz.
 
-### 3. Agno Playground Modu (İnteraktif)
+### 3. Agno Playground Modu (İnteraktif) - henüz implement edilemedi
 
 ```bash
 # Playground server'ı başlat
