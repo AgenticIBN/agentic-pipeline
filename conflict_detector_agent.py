@@ -2,395 +2,336 @@ from __future__ import annotations
 
 import json
 import os
-from typing import List, Optional, Literal, Set, Dict
+from typing import List, Optional, Literal, Set, Dict, Any
 from pydantic import BaseModel, Field
-from agno.agent import Agent
-from agno.models.groq import Groq
 from dotenv import load_dotenv
-
-# Import schemas from optimization_agent
-from optimization_agent import OptimizationPlan, ParamChange, IntentParse
 
 load_dotenv()
 
-# -----------------------------
-# 1) SHARED SCHEMAS (For Meta-Agent Handoff)
-# -----------------------------
+# ============================================================================
+# SCHEMAS
+# ============================================================================
 
 class ConflictDetail(BaseModel):
-    conflict_type: Literal["RESOURCE_CONTENTION", "DIRECT_OPPOSITION", "SPATIAL_OVERLAP", "BASE_STATION_CONFLICT"]
+    """Details about a specific conflict between optimization results."""
+    conflict_type: Literal[
+        "PARAMETER_CONFLICT",      # Same parameter, opposite directions
+        "RESOURCE_CONTENTION",     # Same parameter, same direction but different magnitude
+        "BASE_STATION_CONFLICT",   # Same base station, different parameters
+        "BOOLEAN_CONFLICT"         # ON/OFF conflict
+    ]
     severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
-    conflicting_param: Optional[str] = None
-    conflicting_base_station: Optional[str] = None  # NEW: tx0, tx1, tx2, tx3
+    parameter: str
+    intent1_id: str  # ID from optimization output
+    intent2_id: str  # ID from optimization output
+    intent1_change: float
+    intent2_change: float
+    base_station: Optional[str] = None  # tx0, tx1, tx2, tx3
     description: str
-    conflicting_intent_id: str
+
 
 class ConflictReport(BaseModel):
+    """Report of conflicts between optimization results."""
     is_conflicted: bool
     conflict_summary: str
+    num_conflicts: int
     details: List[ConflictDetail] = Field(default_factory=list)
     resolution_recommendation: Optional[str] = None
+    conflicting_result_ids: List[str] = Field(default_factory=list)
 
-class AgentProposal(BaseModel):
-    """
-    Wraps an intent and its proposed plan.
-    Used by Meta-Agent to evaluate trade-offs.
-    """
-    agent_id: str
-    intent: IntentParse
-    plan: OptimizationPlan
 
-class MetaArbitrationInput(BaseModel):
-    """
-    The full package required by the Meta-Agent to resolve conflicts.
-    This is now the output format of the Conflict Detector.
-    """
-    conflict_report: ConflictReport
-    proposals: List[AgentProposal]
-    current_config_id: Optional[int] = None
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
-# -----------------------------
-# 2) HELPER LOGIC
-# -----------------------------
+def extract_changes_from_result(result: Dict[str, Any]) -> Dict[str, float]:
+    """
+    Extract parameter changes from optimization_agent_v2 result.
+    
+    Args:
+        result: Dict from optimization_agent_v2.optimize():
+            {
+                "test_name": str,
+                "output": {
+                    "changes": [{"param": "tx0_P_dBm", "change": 3.0, ...}]
+                }
+            }
+    
+    Returns:
+        Dict mapping parameter to change value: {"tx0_P_dBm": 3.0, ...}
+    """
+    changes_dict = {}
+    
+    if "output" in result and "changes" in result["output"]:
+        for change_item in result["output"]["changes"]:
+            param = change_item.get("param")
+            change_value = change_item.get("change")
+            
+            if param and change_value is not None:
+                # Handle boolean changes (e.g., tx3_on: True -> 1.0)
+                if isinstance(change_value, bool):
+                    change_value = 1.0 if change_value else 0.0
+                else:
+                    change_value = float(change_value)
+                
+                changes_dict[param] = change_value
+    
+    return changes_dict
 
-def _extract_base_station_from_param(param: str) -> Optional[str]:
-    """
-    Extract base station ID from parameter name.
-    Example: tx0_P_dBm -> tx0, tx1_dAz -> tx1
-    """
-    if param.startswith("tx"):
-        parts = param.split("_")
-        if len(parts) > 0:
-            return parts[0]  # tx0, tx1, tx2, tx3
+
+def get_result_id(result: Dict[str, Any]) -> str:
+    """Get unique identifier for an optimization result."""
+    if "output" in result and "selected_config_id" in result["output"]:
+        return str(result["output"]["selected_config_id"])
+    elif "test_name" in result:
+        return result["test_name"]
+    else:
+        return f"result_{id(result)}"
+
+
+def get_priority(result: Dict[str, Any]) -> str:
+    """Get priority from optimization result input."""
+    return result.get("input", {}).get("priority", "MEDIUM")
+
+
+def get_target_area(result: Dict[str, Any]) -> str:
+    """Get target area from optimization result input."""
+    return result.get("input", {}).get("target_area", "unknown")
+
+
+def get_base_station_from_param(param: str) -> Optional[str]:
+    """Extract base station ID from parameter name (e.g., tx0_P_dBm -> tx0)."""
+    if param.startswith("tx") and len(param) > 2:
+        end_idx = param.find("_")
+        if end_idx > 0:
+            return param[:end_idx]
     return None
 
-def _check_time_overlap(intent_a: IntentParse, intent_b: IntentParse) -> Optional[ConflictDetail]:
-    """
-    Check if two intents have overlapping time constraints.
-    Returns ConflictDetail if overlap exists, None otherwise.
-    
-    Time format expected: ISO 8601 (e.g., "2026-02-05T10:00:00")
-    """
-    from datetime import datetime
-    
-    # If either intent has no time constraints, consider no time conflict
-    if not (intent_a.time_constraint_start and intent_a.time_constraint_end):
-        return None
-    if not (intent_b.time_constraint_start and intent_b.time_constraint_end):
-        return None
-    
-    try:
-        # Parse time strings
-        a_start = datetime.fromisoformat(intent_a.time_constraint_start)
-        a_end = datetime.fromisoformat(intent_a.time_constraint_end)
-        b_start = datetime.fromisoformat(intent_b.time_constraint_start)
-        b_end = datetime.fromisoformat(intent_b.time_constraint_end)
-        
-        # Check for overlap: A and B overlap if (A.start < B.end) AND (B.start < A.end)
-        has_overlap = (a_start < b_end) and (b_start < a_end)
-        
-        if has_overlap:
-            # Calculate overlap duration
-            overlap_start = max(a_start, b_start)
-            overlap_end = min(a_end, b_end)
-            overlap_duration = (overlap_end - overlap_start).total_seconds() / 3600  # hours
-            
-            return ConflictDetail(
-                conflict_type="RESOURCE_CONTENTION",
-                severity="HIGH",
-                description=f"Time overlap detected. Intent A: {a_start} to {a_end}, Intent B: {b_start} to {b_end}. Overlap: {overlap_duration:.2f} hours.",
-                conflicting_intent_id="time_conflict"
-            )
-        else:
-            return None
-            
-    except (ValueError, AttributeError) as e:
-        # Invalid time format, skip time conflict check
-        return None
 
-def _get_base_station_params(plan: OptimizationPlan) -> Dict[str, List[str]]:
-    """
-    Group parameters by base station.
-    Returns: {tx0: [tx0_P_dBm, tx0_dAz], tx1: [...], ...}
-    """
-    bs_params = {}
-    for change in plan.changes:
-        bs = _extract_base_station_from_param(change.param)
-        if bs:
-            if bs not in bs_params:
-                bs_params[bs] = []
-            bs_params[bs].append(change.param)
-    return bs_params
-
-def _analyze_parameter_conflict(
-    param: str, 
-    change_a: ParamChange, 
-    change_b: ParamChange,
+def analyze_parameter_conflict(
+    param: str,
+    change1: float,
+    change2: float,
+    result1_id: str,
+    result2_id: str,
     same_target_area: bool
 ) -> Optional[ConflictDetail]:
     """
-    Analyzes conflict between two parameter changes.
-    In Optimization Agent logic, 'after' for numeric values represents the DELTA.
-    
-    same_target_area: If True, increases severity (more critical)
-    """
-    
-    bs = _extract_base_station_from_param(param)
-    
-    # Severity multiplier based on target area overlap
-    severity_boost = 1 if same_target_area else 0
-    
-    # 1. Boolean Conflict (e.g., One sets ON, other sets OFF)
-    if "on" in param.lower():
-        val_a = change_a.change
-        val_b = change_b.change
-        if val_a != val_b:
-            # TRUE CONFLICT: One wants ON, other wants OFF
-            severity = "CRITICAL" if same_target_area else "HIGH"
-            return ConflictDetail(
-                conflict_type="DIRECT_OPPOSITION",
-                severity=severity,
-                conflicting_param=param,
-                conflicting_base_station=bs,
-                description=f"Intent A wants {val_a}, Intent B wants {val_b} for {param}. Same target area: {same_target_area}",
-                conflicting_intent_id="active_intent"
-            )
-        else:
-            # NO CONFLICT: Both want the same state (e.g., both ON)
-            # This is agreement, not conflict
-            return None
-
-    # 2. Numeric Conflict (Power, Tilt, Azimuth)
-    # 'change' is a delta value (e.g., +3.0 or -5.0)
-    try:
-        delta_a = float(change_a.change)
-        delta_b = float(change_b.change)
-    except (ValueError, TypeError):
-        return None
-
-    # Opposite Directions (One Increases, One Decreases) -> CRITICAL/HIGH
-    if (delta_a > 0 and delta_b < 0) or (delta_a < 0 and delta_b > 0):
-        severity = "CRITICAL" if same_target_area else "HIGH"
-        return ConflictDetail(
-            conflict_type="DIRECT_OPPOSITION",
-            severity=severity,
-            conflicting_param=param,
-            conflicting_base_station=bs,
-            description=f"Intent A modifies {param} by {delta_a}, Intent B by {delta_b} (opposite directions). Same area: {same_target_area}",
-            conflicting_intent_id="active_intent"
-        )
-    
-    # Same Direction (Both Increase) -> Resource Contention / Saturation Risk
-    severity = "HIGH" if same_target_area else "MEDIUM"
-    return ConflictDetail(
-        conflict_type="RESOURCE_CONTENTION",
-        severity=severity,
-        conflicting_param=param,
-        conflicting_base_station=bs,
-        description=f"Both intents modify {param} in same direction. A: {delta_a}, B: {delta_b}. Risk of over-saturation. Same area: {same_target_area}",
-        conflicting_intent_id="active_intent"
-    )
-
-# -----------------------------
-# 3) TOOL DEFINITION
-# -----------------------------
-
-def detect_conflicts(
-    new_intent_json: str, 
-    new_plan_json: str, 
-    active_intents_data: str
-) -> str:
-    """
-    Analyzes conflicts at BASE STATION level and prepares the full input package for the Meta-Agent.
-    
-    KEY CHANGE: Conflict detection is based on which BASE STATIONS are affected,
-    not just target_area. Since all intents affect the same 4 base stations (tx0-tx3),
-    conflicts are detected when:
-    1. Same base station is modified by multiple intents
-    2. Same parameter on same base station is modified
-    3. Severity is increased if target_area also overlaps
+    Analyze conflict between two parameter changes.
     
     Args:
-        new_intent_json: JSON string of the new IntentParse.
-        new_plan_json: JSON string of the proposed OptimizationPlan.
-        active_intents_data: JSON string list of dicts [{"intent": IntentParse, "plan": OptimizationPlan}, ...].
+        param: Parameter name (e.g., tx0_P_dBm)
+        change1: Change value from result1
+        change2: Change value from result2
+        result1_id: ID of first optimization result
+        result2_id: ID of second optimization result
+        same_target_area: Whether results target same area (increases severity)
+    
+    Returns:
+        ConflictDetail if conflict exists, None otherwise
+    """
+    base_station = get_base_station_from_param(param)
+    
+    # Skip if identical changes (agreement, not conflict)
+    if abs(change1 - change2) < 0.01:
+        return None
+    
+    # 1. BOOLEAN CONFLICT (ON/OFF parameters)
+    if "on" in param.lower():
+        # Different boolean values
+        if (change1 > 0.5) != (change2 > 0.5):  # One is ON, other is OFF
+            severity = "CRITICAL" if same_target_area else "HIGH"
+            return ConflictDetail(
+                conflict_type="BOOLEAN_CONFLICT",
+                severity=severity,
+                parameter=param,
+                intent1_id=result1_id,
+                intent2_id=result2_id,
+                intent1_change=change1,
+                intent2_change=change2,
+                base_station=base_station,
+                description=f"Boolean conflict on {param}: Result1 wants {'ON' if change1 > 0.5 else 'OFF'}, Result2 wants {'ON' if change2 > 0.5 else 'OFF'}"
+            )
+        else:
+            return None  # Both want same state (agreement)
+    
+    # 2. OPPOSITE DIRECTIONS (Most Critical)
+    if change1 * change2 < 0:  # Different signs
+        magnitude = abs(change1) + abs(change2)
+        
+        # Severity based on magnitude and area overlap
+        if magnitude >= 10:
+            severity = "CRITICAL"
+        elif magnitude >= 5:
+            severity = "CRITICAL" if same_target_area else "HIGH"
+        elif magnitude >= 2:
+            severity = "HIGH" if same_target_area else "MEDIUM"
+        else:
+            severity = "MEDIUM" if same_target_area else "LOW"
+        
+        return ConflictDetail(
+            conflict_type="PARAMETER_CONFLICT",
+            severity=severity,
+            parameter=param,
+            intent1_id=result1_id,
+            intent2_id=result2_id,
+            intent1_change=change1,
+            intent2_change=change2,
+            base_station=base_station,
+            description=f"Direct opposition on {param}: Result1 changes by {change1:+.1f}, Result2 by {change2:+.1f}"
+        )
+    
+    # 3. SAME DIRECTION but large difference (Resource Contention)
+    elif abs(change1 - change2) > 5:
+        severity = "HIGH" if same_target_area else "MEDIUM"
+        
+        return ConflictDetail(
+            conflict_type="RESOURCE_CONTENTION",
+            severity=severity,
+            parameter=param,
+            intent1_id=result1_id,
+            intent2_id=result2_id,
+            intent1_change=change1,
+            intent2_change=change2,
+            base_station=base_station,
+            description=f"Large magnitude difference on {param}: Result1 changes by {change1:+.1f}, Result2 by {change2:+.1f}"
+        )
+    
+    # 4. SAME DIRECTION, smaller difference (Coordination needed)
+    else:
+        severity = "MEDIUM" if same_target_area else "LOW"
+        
+        return ConflictDetail(
+            conflict_type="RESOURCE_CONTENTION",
+            severity=severity,
+            parameter=param,
+            intent1_id=result1_id,
+            intent2_id=result2_id,
+            intent1_change=change1,
+            intent2_change=change2,
+            base_station=base_station,
+            description=f"Same direction on {param}: Result1 {change1:+.1f}, Result2 {change2:+.1f}. Coordination may be needed."
+        )
+
+
+# ============================================================================
+# MAIN CONFLICT DETECTION FUNCTION
+# ============================================================================
+
+def detect_conflicts(
+    new_result: Dict[str, Any],
+    active_results: List[Dict[str, Any]]
+) -> ConflictReport:
+    """
+    Detect conflicts between a new optimization result and active optimization results.
+    
+    This is the MAIN function - only works with optimization_agent_v2 outputs.
+    No intent parsing or LLM calls - pure deterministic conflict detection.
+    
+    Args:
+        new_result: New optimization result from optimization_agent_v2.optimize()
+        active_results: List of active optimization results
         
     Returns:
-        JSON string of MetaArbitrationInput (containing the report AND all proposals).
+        ConflictReport with details of conflicts
     """
     
-    # 1. Parse Inputs
-    new_intent = IntentParse.model_validate_json(new_intent_json)
-    new_plan = OptimizationPlan.model_validate_json(new_plan_json)
+    # Extract changes and metadata from new result
+    new_changes = extract_changes_from_result(new_result)
+    new_id = get_result_id(new_result)
+    new_priority = get_priority(new_result)
+    new_area = get_target_area(new_result)
     
-    try:
-        active_list = json.loads(active_intents_data)
-    except:
-        return json.dumps({"error": "Invalid active_intents_data format"})
-
     conflicts = []
-    proposals = []
-
-    # 2. Prepare Proposal List (Active + New)
-    proposals.append(AgentProposal(
-        agent_id="new_intent_agent",
-        intent=new_intent,
-        plan=new_plan
-    ))
-
-    # Extract base station parameters from new plan
-    new_changes_map = {c.param: c for c in new_plan.changes}
-    new_bs_params = _get_base_station_params(new_plan)
-
-    for idx, item in enumerate(active_list):
-        active_intent = IntentParse(**item["intent"])
-        active_plan = OptimizationPlan(**item["plan"])
+    conflicting_ids = set()
+    
+    # Compare with each active result
+    for active_result in active_results:
+        active_changes = extract_changes_from_result(active_result)
+        active_id = get_result_id(active_result)
+        active_priority = get_priority(active_result)
+        active_area = get_target_area(active_result)
         
-        # Add to proposals list for Meta-Agent
-        proposals.append(AgentProposal(
-            agent_id=f"active_intent_{idx}_{active_plan.selected_config_id}",
-            intent=active_intent,
-            plan=active_plan
-        ))
-
-        active_changes_map = {c.param: c for c in active_plan.changes}
-        active_bs_params = _get_base_station_params(active_plan)
+        same_area = (new_area == active_area)
         
-        # Check if target areas overlap (used for severity boosting)
-        same_target_area = (new_intent.target_area == active_intent.target_area)
-        
-        # --- TIME OVERLAP CHECK (Priority Check) ---
-        time_conflict = _check_time_overlap(new_intent, active_intent)
-        if time_conflict:
-            time_conflict.conflicting_intent_id = str(active_plan.selected_config_id)
-            conflicts.append(time_conflict)
-        
-        # --- A. BASE STATION LEVEL CONFLICT CHECK ---
-        common_base_stations = set(new_bs_params.keys()) & set(active_bs_params.keys())
-        
-        if not common_base_stations:
-            # Different base stations
-            if same_target_area:
-                # Same target area but different BSs - Low coordination needed
-                conflicts.append(ConflictDetail(
-                    conflict_type="SPATIAL_OVERLAP",
-                    severity="LOW",
-                    description=f"Same target area ({new_intent.target_area}) but different base stations. New: {list(new_bs_params.keys())}, Active: {list(active_bs_params.keys())}. May need coordination.",
-                    conflicting_intent_id=str(active_plan.selected_config_id)
-                ))
-            # else: Different BS + Different Area = No conflict at all, skip
-            continue
-        
-        # --- B. PARAMETER LEVEL CONFLICT CHECK (on common base stations) ---
-        common_params = set(new_changes_map.keys()) & set(active_changes_map.keys())
+        # Find common parameters
+        common_params = set(new_changes.keys()) & set(active_changes.keys())
         
         if not common_params:
-            # Same base stations, different parameters
-            severity = "MEDIUM" if same_target_area else "LOW"
-            conflicts.append(ConflictDetail(
-                conflict_type="BASE_STATION_CONFLICT",
-                severity=severity,
-                description=f"Both intents modify same base stations {list(common_base_stations)} but different parameters. Same target area: {same_target_area}",
-                conflicting_intent_id=str(active_plan.selected_config_id)
-            ))
-        else:
-            # Same base stations, same parameters - Detailed conflict analysis
-            for param in common_params:
-                detail = _analyze_parameter_conflict(
-                    param, 
-                    new_changes_map[param], 
-                    active_changes_map[param],
-                    same_target_area
-                )
-                if detail:
-                    detail.conflicting_intent_id = str(active_plan.selected_config_id)
-                    conflicts.append(detail)
-
-    # 3. Create Report
-    is_conflicted = len(conflicts) > 0
-    max_severity = "LOW"
-    severity_rank = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
-    
-    if is_conflicted:
-        current_max = 0
-        for c in conflicts:
-            if severity_rank[c.severity] > current_max:
-                current_max = severity_rank[c.severity]
-                max_severity = c.severity
+            # No overlapping parameters - check if same base stations
+            new_bs = {get_base_station_from_param(p) for p in new_changes.keys()}
+            active_bs = {get_base_station_from_param(p) for p in active_changes.keys()}
+            new_bs.discard(None)
+            active_bs.discard(None)
+            
+            common_bs = new_bs & active_bs
+            if common_bs and same_area:
+                # Same base stations, different parameters, same area
+                conflicts.append(ConflictDetail(
+                    conflict_type="BASE_STATION_CONFLICT",
+                    severity="MEDIUM" if same_area else "LOW",
+                    parameter="multiple",
+                    intent1_id=new_id,
+                    intent2_id=active_id,
+                    intent1_change=0.0,
+                    intent2_change=0.0,
+                    base_station=", ".join(sorted(common_bs)),
+                    description=f"Both results modify {', '.join(sorted(common_bs))} but different parameters"
+                ))
+                conflicting_ids.update([new_id, active_id])
+            continue
         
-        summary = f"Detected {len(conflicts)} conflicts. Max severity: {max_severity}. Base station-level analysis."
+        # Analyze each common parameter
+        for param in common_params:
+            conflict = analyze_parameter_conflict(
+                param,
+                new_changes[param],
+                active_changes[param],
+                new_id,
+                active_id,
+                same_area
+            )
+            
+            if conflict:
+                conflicts.append(conflict)
+                conflicting_ids.update([new_id, active_id])
+    
+    # Generate report
+    if conflicts:
+        param_list = [c.parameter for c in conflicts if c.parameter != "multiple"]
+        conflict_summary = f"Found {len(conflicts)} conflict(s) between new result ({new_id}) and {len(active_results)} active result(s). "
+        if param_list:
+            conflict_summary += f"Conflicting parameters: {', '.join(sorted(set(param_list)))}"
+        
+        # Generate recommendation based on priorities
+        priority_map = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
+        new_p_level = priority_map.get(new_priority, 2)
+        
+        # Get highest priority from active results
+        active_priorities = [get_priority(r) for r in active_results]
+        max_active_p = max([priority_map.get(p, 2) for p in active_priorities])
+        
+        if new_p_level > max_active_p:
+            recommendation = f"New result has higher priority ({new_priority}). Consider prioritizing new result or applying conflict resolution."
+        elif new_p_level < max_active_p:
+            recommendation = f"Active results have higher priority. Consider rejecting new result or applying conflict resolution."
+        else:
+            recommendation = f"Equal priorities ({new_priority}). Apply conflict resolution: weighted merge, sequential application, or user arbitration."
+        
+        return ConflictReport(
+            is_conflicted=True,
+            conflict_summary=conflict_summary,
+            num_conflicts=len(conflicts),
+            details=conflicts,
+            resolution_recommendation=recommendation,
+            conflicting_result_ids=sorted(list(conflicting_ids))
+        )
     else:
-        summary = "No conflicts detected. Intents operate on completely disjoint resources."
-
-    conflict_report = ConflictReport(
-        is_conflicted=is_conflicted,
-        conflict_summary=summary,
-        details=conflicts,
-        resolution_recommendation=_get_recommendation(max_severity, is_conflicted)
-    )
-    
-    # 4. Construct Final Meta-Agent Input Package
-    meta_input = MetaArbitrationInput(
-        conflict_report=conflict_report,
-        proposals=proposals,
-        current_config_id=new_plan.current_config_id
-    )
-    
-    return meta_input.model_dump_json(indent=2)
-
-def _get_recommendation(max_severity: str, is_conflicted: bool) -> str:
-    """Generate resolution recommendation based on severity"""
-    if not is_conflicted:
-        return "Proceed with execution."
-    
-    if max_severity == "CRITICAL":
-        return "CRITICAL conflicts detected. Meta-Agent must resolve immediately. Consider rejecting or sequencing intents."
-    elif max_severity == "HIGH":
-        return "HIGH conflicts detected. Meta-Agent should evaluate trade-offs and potentially merge or sequence plans."
-    elif max_severity == "MEDIUM":
-        return "MEDIUM conflicts detected. Coordinate changes on same base stations. Merge if compatible."
-    else:
-        return "LOW conflicts detected. Consider coordination but parallel execution may be safe."
-
-# -----------------------------
-# 4) AGENT DEFINITION
-# -----------------------------
-
-CONFLICT_INSTRUCTIONS = [
-    "You are a BASE STATION LEVEL Conflict Detection Agent (CDA) for a 6G Network Management System.",
-    "Your Goal: Analyze proposed Optimization Plans at the BASE STATION level against Active Intents.",
-    "",
-    "CRITICAL: This system uses 4 shared base stations (tx0, tx1, tx2, tx3).",
-    "Even if intents target different geographic areas, they may conflict if they modify the SAME base stations.",
-    "",
-    "Conflict Detection Logic:",
-    "1. TIME OVERLAP CHECK (First Priority):",
-    "   - If time_constraint_start/end overlap → HIGH severity conflict",
-    "   - No time constraints = no time conflict",
-    "",
-    "2. BASE STATION OVERLAP: Do plans modify the same base station (tx0-tx3)?",
-    "   - Different BS + Different Area → NO CONFLICT (skip)",
-    "   - Different BS + Same Area → LOW severity (coordination)",
-    "   - Same BS, different params → LOW-MEDIUM severity",
-    "   - Same BS, same param → Detailed analysis",
-    "",
-    "3. PARAMETER CONFLICT: For common base stations and parameters:",
-    "   - Boolean params (tx_on): Same value → NO CONFLICT (agreement)",
-    "   - Boolean params (tx_on): Different values → HIGH/CRITICAL",
-    "   - Numeric params: Opposite directions (+/-) → HIGH/CRITICAL",
-    "   - Numeric params: Same direction → MEDIUM/HIGH (saturation risk)",
-    "",
-    "4. SEVERITY BOOSTING: If target_area also matches, increase severity by one level.",
-    "   Example: HIGH → CRITICAL, MEDIUM → HIGH",
-    "",
-    "Output: MetaArbitrationInput with detailed ConflictReport and all AgentProposals.",
-]
-
-conflict_detector_agent = Agent(
-    name="Base Station Level Conflict Detector",
-    description="Analyzes network optimization plans for conflicts at base station level.",
-    model=Groq(id=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
-    tools=[detect_conflicts],
-    output_schema=MetaArbitrationInput,
-    instructions=CONFLICT_INSTRUCTIONS,
-)
+        return ConflictReport(
+            is_conflicted=False,
+            conflict_summary=f"No conflicts detected. New result ({new_id}) can be applied safely with {len(active_results)} active result(s).",
+            num_conflicts=0,
+            details=[],
+            resolution_recommendation="Proceed with applying new result.",
+            conflicting_result_ids=[]
+        )
