@@ -7,8 +7,8 @@ Works with conflict_detector_agent.py outputs
 from __future__ import annotations
 
 import json
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # ============================================================================
@@ -17,12 +17,14 @@ from pydantic import BaseModel, Field
 
 class PriorityBasedResolutionOutput(BaseModel):
     """Output from priority-based resolution."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     conflict_detected: bool
     resolution_strategy: str
     winning_result_id: Optional[str] = None
     winning_priority: Optional[str] = None
-    winning_config: Optional[Dict[str, Any]] = None  # The full optimization result
-    rejected_result_ids: List[str] = Field(default_factory=list)
+    winning_config: Optional[dict] = None  # The full optimization result
+    rejected_result_ids: list = Field(default_factory=list)
     resolution_notes: str
     conflict_summary: Optional[str] = None
 
@@ -44,9 +46,9 @@ PRIORITY_RANK = {
 # ============================================================================
 
 def resolve_by_priority(
-    conflict_report: Dict[str, Any],
-    new_result: Dict[str, Any],
-    active_results: List[Dict[str, Any]]
+    conflict_report: dict,
+    new_result: dict,
+    active_results: list
 ) -> PriorityBasedResolutionOutput:
     """
     Priority-based resolution: Select result with highest priority.

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from typing import List, Optional, Literal, Set, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Optional, Literal, Set
+from pydantic import BaseModel, Field, ConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,6 +14,8 @@ load_dotenv()
 
 class ConflictDetail(BaseModel):
     """Details about a specific conflict between optimization results."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     conflict_type: Literal[
         "PARAMETER_CONFLICT",      # Same parameter, opposite directions
         "RESOURCE_CONTENTION",     # Same parameter, same direction but different magnitude
@@ -32,19 +34,21 @@ class ConflictDetail(BaseModel):
 
 class ConflictReport(BaseModel):
     """Report of conflicts between optimization results."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     is_conflicted: bool
     conflict_summary: str
     num_conflicts: int
-    details: List[ConflictDetail] = Field(default_factory=list)
+    details: list = Field(default_factory=list)
     resolution_recommendation: Optional[str] = None
-    conflicting_result_ids: List[str] = Field(default_factory=list)
+    conflicting_result_ids: list = Field(default_factory=list)
 
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
-def extract_changes_from_result(result: Dict[str, Any]) -> Dict[str, float]:
+def extract_changes_from_result(result: dict) -> dict:
     """
     Extract parameter changes from optimization_agent_v2 result.
     
@@ -79,7 +83,7 @@ def extract_changes_from_result(result: Dict[str, Any]) -> Dict[str, float]:
     return changes_dict
 
 
-def get_result_id(result: Dict[str, Any]) -> str:
+def get_result_id(result: dict) -> str:
     """Get unique identifier for an optimization result."""
     if "output" in result and "selected_config_id" in result["output"]:
         return str(result["output"]["selected_config_id"])
@@ -89,12 +93,12 @@ def get_result_id(result: Dict[str, Any]) -> str:
         return f"result_{id(result)}"
 
 
-def get_priority(result: Dict[str, Any]) -> str:
+def get_priority(result: dict) -> str:
     """Get priority from optimization result input."""
     return result.get("input", {}).get("priority", "MEDIUM")
 
 
-def get_target_area(result: Dict[str, Any]) -> str:
+def get_target_area(result: dict) -> str:
     """Get target area from optimization result input."""
     return result.get("input", {}).get("target_area", "unknown")
 
@@ -219,8 +223,8 @@ def analyze_parameter_conflict(
 # ============================================================================
 
 def detect_conflicts(
-    new_result: Dict[str, Any],
-    active_results: List[Dict[str, Any]]
+    new_result: dict,
+    active_results: list
 ) -> ConflictReport:
     """
     Detect conflicts between a new optimization result and active optimization results.

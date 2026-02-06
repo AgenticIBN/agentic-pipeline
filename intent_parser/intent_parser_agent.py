@@ -1,8 +1,8 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Literal
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict
 
 from agno.agent import Agent
 from agno.models.groq import Groq
@@ -12,12 +12,11 @@ load_dotenv()  # .env içindeki GROQ_API_KEY'i ortam değişkeni olarak yükler
 
 # --- 1) Şema: Sonraki agent'ların kullanacağı yapı ---
 
-KpiName = Literal["RX_POWER", "SINR", "THROUGHPUT_5P", "SERVED_USERS"]
-Op = Literal["GT", "GTE", "LT", "LTE", "BETWEEN", "DELTA_UP", "DELTA_DOWN", "TARGET"]
-
 class KpiThreshold(BaseModel):
-    kpi: KpiName
-    op: Op = Field(..., description="Comparison/intent operator")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    kpi: str  # RX_POWER, SINR, THROUGHPUT_5P, or SERVED_USERS
+    op: str = Field(..., description="Comparison/intent operator: GT, GTE, LT, LTE, BETWEEN, DELTA_UP, DELTA_DOWN, TARGET")
     value: Optional[float] = Field(None, description="Single threshold or target value")
     value_low: Optional[float] = Field(None, description="Lower bound for BETWEEN")
     value_high: Optional[float] = Field(None, description="Upper bound for BETWEEN")
@@ -26,12 +25,14 @@ class KpiThreshold(BaseModel):
 
 class IntentParse(BaseModel):
     """User's intent - what they want to achieve (not how to achieve it)"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     target_area: str = Field(..., description="Where to apply: site/cell/cluster/city/coordinates")
-    target_kpis: List[KpiName] = Field(..., min_length=1)
-    kpi_thresholds: List[KpiThreshold] = Field(default_factory=list)
+    target_kpis: list = Field(..., min_length=1)
+    kpi_thresholds: list = Field(default_factory=list)
     time_constraint_start: Optional[str] = Field(None, description="ISO 8601 format: 2026-02-05T10:00:00")
     time_constraint_end: Optional[str] = Field(None, description="ISO 8601 format: 2026-02-05T14:00:00")
-    priority: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = "MEDIUM"
+    priority: str = "MEDIUM"  # LOW, MEDIUM, HIGH, or CRITICAL
     confidence: Optional[float] = Field(default=0.8, ge=0, le=1, description="Confidence score (auto-generated)")
 
 
