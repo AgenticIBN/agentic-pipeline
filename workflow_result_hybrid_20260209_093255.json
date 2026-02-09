@@ -1,0 +1,467 @@
+{
+  "workflow_id": "workflow_20260209_093244",
+  "workflow_type": "HYBRID (Surrogate Model + LLM)",
+  "timestamp": "2026-02-09T09:32:55.532941",
+  "input": {
+    "intent_text": "There is an event in kartal region between 3 p.m. - 5 p.m., decrease the RX power for 5 dBm for energy efficiency. Priority is CRITICAL",
+    "strategy": "PRIORITY"
+  },
+  "step1_intent_parse": {
+    "target_area": "Kartal",
+    "target_kpis": [
+      "RX_POWER"
+    ],
+    "kpi_thresholds": [
+      {
+        "kpi": "RX_POWER",
+        "operator": "DELTA_DOWN",
+        "delta": 5,
+        "unit": "dBm"
+      }
+    ],
+    "time_constraint_start": "2026-02-05T15:00:00",
+    "time_constraint_end": "2026-02-05T17:00:00",
+    "priority": "CRITICAL",
+    "confidence": 0.95
+  },
+  "step2_hybrid_optimization": {
+    "test_name": "optimization",
+    "passed": true,
+    "input": {
+      "target_area": "Kartal",
+      "target_kpis": [
+        "RX_POWER"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "RX_POWER",
+          "operator": "DELTA_DOWN",
+          "delta": 5,
+          "unit": "dBm"
+        }
+      ],
+      "time_constraint_start": "2026-02-05T15:00:00",
+      "time_constraint_end": "2026-02-05T17:00:00",
+      "priority": "CRITICAL",
+      "confidence": 0.95
+    },
+    "output": {
+      "selected_config_id": 1,
+      "changes": [
+        {
+          "parameter": "total_tx_power_watt",
+          "before": 0.0,
+          "change": 20.0
+        },
+        {
+          "parameter": "tx0_on",
+          "before": false,
+          "change": "True"
+        },
+        {
+          "parameter": "tx0_P_dBm",
+          "before": 30.0,
+          "change": 10.0
+        },
+        {
+          "parameter": "tx0_dAz",
+          "before": 0.0,
+          "change": -15.0
+        },
+        {
+          "parameter": "tx1_on",
+          "before": false,
+          "change": "True"
+        },
+        {
+          "parameter": "tx1_P_dBm",
+          "before": 30.0,
+          "change": 10.0
+        },
+        {
+          "parameter": "tx1_dAz",
+          "before": 0.0,
+          "change": 15.0
+        }
+      ],
+      "final_config": {
+        "user_set_id": 0,
+        "K_users": 800,
+        "rx_power_thr_dBm": -47.27,
+        "total_tx_power_watt": 20.0,
+        "tx0_on": true,
+        "tx0_P_dBm": 40.0,
+        "tx0_dAz": -15.0,
+        "tx0_dEl": 0.0,
+        "tx1_on": true,
+        "tx1_P_dBm": 40.0,
+        "tx1_dAz": 15.0,
+        "tx1_dEl": 0.0,
+        "tx2_on": false,
+        "tx2_P_dBm": 30.0,
+        "tx2_dAz": 0.0,
+        "tx2_dEl": 0.0,
+        "tx3_on": false,
+        "tx3_P_dBm": 30.0,
+        "tx3_dAz": 0.0,
+        "tx3_dEl": 0.0
+      },
+      "expected_kpis": {
+        "RX_POWER": -56.50302173047335,
+        "SINR": 16.07590646082774,
+        "COVERAGE": 0.3073757955671823,
+        "LOAD_IMBALANCE": 0.2
+      },
+      "constraints_satisfied": true
+    },
+    "reasoning": "Iteration 0: To decrease RX_POWER, we need to reduce the power of the transmitters. Since the target is to decrease RX_POWER by an unspecified amount, we will apply a moderate reduction of 2 dBm to both active transmitters (tx0 and tx1) to start, as this will weaken the signal without severely impacting coverage or SINR. Further adjustments can be made based on KPI feedback.\n  Predicted: RX_POWER=-56.50 dBm, SINR=16.08 dB\n\nIteration 1: The target KPI of decreasing RX_POWER is not specific, but given the current RX_POWER of -56.50 dBm is lower than the threshold of -47.27 dBm, and the coverage is 30.7% which might not be sufficient for the critical priority in the Kartal area. However, since the specific target for RX_POWER decrease is not given, the focus shifts towards ensuring coverage and SINR are within manageable levels while keeping an eye on the load imbalance. The current configuration seems to be overshooting the RX_POWER target threshold, and the SINR is at a relatively comfortable level. Given the load imbalance of 0.200, adjusting angles or power could help, but first, reducing power slightly to decrease the overshoot and then reassessing would be prudent. Hence, reducing the power of tx0 and tx1 by 1 dBm each is proposed as a refinement to adjust the configuration towards potentially better coverage and efficiency without overstepping the RX_POWER threshold significantly.\n  Predicted: RX_POWER=-56.50 dBm, SINR=16.08 dB",
+    "result_id": "opt_20260209_093246",
+    "priority": "CRITICAL",
+    "iterations": 2,
+    "surrogate_predictions": [
+      {
+        "RX_POWER": -56.50302173047335,
+        "SINR": 16.07590646082774,
+        "COVERAGE": 0.3073757955671823,
+        "LOAD_IMBALANCE": 0.2
+      },
+      {
+        "RX_POWER": -56.50302173047335,
+        "SINR": 16.07590646082774,
+        "COVERAGE": 0.3073757955671823,
+        "LOAD_IMBALANCE": 0.2
+      }
+    ]
+  },
+  "step3_conflict_detection": {
+    "is_conflicted": true,
+    "conflict_summary": "4 conflicts detected: 2 parameter conflicts, 1 resource contention, 0 base station conflicts, 0 boolean conflicts",
+    "num_conflicts": 4,
+    "details": [
+      {
+        "conflict_type": "PARAMETER_CONFLICT",
+        "severity": "LOW",
+        "parameter": "total_tx_power_watt",
+        "intent1_id": "opt_20260209_093246",
+        "intent2_id": "opt_20260209_093130",
+        "intent1_change": 20.0,
+        "intent2_change": 39.905246299377595,
+        "base_station": "-",
+        "description": "Different total_tx_power_watt changes"
+      },
+      {
+        "conflict_type": "PARAMETER_CONFLICT",
+        "severity": "LOW",
+        "parameter": "tx0_P_dBm",
+        "intent1_id": "opt_20260209_093246",
+        "intent2_id": "opt_20260209_093130",
+        "intent1_change": 10.0,
+        "intent2_change": 13.0,
+        "base_station": "TX0",
+        "description": "Different tx0_P_dBm changes"
+      },
+      {
+        "conflict_type": "PARAMETER_CONFLICT",
+        "severity": "LOW",
+        "parameter": "tx1_P_dBm",
+        "intent1_id": "opt_20260209_093246",
+        "intent2_id": "opt_20260209_093130",
+        "intent1_change": 10.0,
+        "intent2_change": 13.0,
+        "base_station": "TX1",
+        "description": "Different tx1_P_dBm changes"
+      },
+      {
+        "conflict_type": "RESOURCE_CONTENTION",
+        "severity": "LOW",
+        "parameter": "tx0_dAz",
+        "intent1_id": "opt_20260209_093246",
+        "intent2_id": "opt_20260209_093130",
+        "intent1_change": -15.0,
+        "intent2_change": -15.0,
+        "base_station": "TX0",
+        "description": "Same direction, same magnitude tx0_dAz changes"
+      }
+    ],
+    "resolution_recommendation": "WEIGHTED_MERGE",
+    "conflicting_result_ids": [
+      "opt_20260209_093246",
+      "opt_20260209_093130"
+    ],
+    "reasoning": "Detected parameter conflicts on total_tx_power_watt, tx0_P_dBm, and tx1_P_dBm with same direction but different magnitudes. Since severity is LOW and changes are in the same direction, recommend WEIGHTED_MERGE strategy."
+  },
+  "step4_resolution": {
+    "conflict_detected": true,
+    "resolution_strategy": "PRIORITY",
+    "winning_result_id": "opt_20260209_093246",
+    "winning_priority": "CRITICAL",
+    "winning_config": {
+      "test_name": "optimization",
+      "passed": true,
+      "input": {
+        "target_area": "Kartal",
+        "target_kpis": [
+          "RX_POWER"
+        ],
+        "kpi_thresholds": [
+          {
+            "kpi": "RX_POWER",
+            "operator": "DELTA_DOWN",
+            "delta": 5,
+            "unit": "dBm"
+          }
+        ],
+        "time_constraint_start": "2026-02-05T15:00:00",
+        "time_constraint_end": "2026-02-05T17:00:00",
+        "priority": "CRITICAL",
+        "confidence": 0.95
+      },
+      "output": {
+        "selected_config_id": 1,
+        "changes": [
+          {
+            "parameter": "total_tx_power_watt",
+            "before": 0.0,
+            "change": 20.0
+          },
+          {
+            "parameter": "tx0_on",
+            "before": false,
+            "change": "True"
+          },
+          {
+            "parameter": "tx0_P_dBm",
+            "before": 30.0,
+            "change": 10.0
+          },
+          {
+            "parameter": "tx0_dAz",
+            "before": 0.0,
+            "change": -15.0
+          },
+          {
+            "parameter": "tx1_on",
+            "before": false,
+            "change": "True"
+          },
+          {
+            "parameter": "tx1_P_dBm",
+            "before": 30.0,
+            "change": 10.0
+          },
+          {
+            "parameter": "tx1_dAz",
+            "before": 0.0,
+            "change": 15.0
+          }
+        ],
+        "final_config": {
+          "user_set_id": 0,
+          "K_users": 800,
+          "rx_power_thr_dBm": -47.27,
+          "total_tx_power_watt": 20.0,
+          "tx0_on": true,
+          "tx0_P_dBm": 40.0,
+          "tx0_dAz": -15.0,
+          "tx0_dEl": 0.0,
+          "tx1_on": true,
+          "tx1_P_dBm": 40.0,
+          "tx1_dAz": 15.0,
+          "tx1_dEl": 0.0,
+          "tx2_on": false,
+          "tx2_P_dBm": 30.0,
+          "tx2_dAz": 0.0,
+          "tx2_dEl": 0.0,
+          "tx3_on": false,
+          "tx3_P_dBm": 30.0,
+          "tx3_dAz": 0.0,
+          "tx3_dEl": 0.0
+        },
+        "expected_kpis": {
+          "RX_POWER": -56.50302173047335,
+          "SINR": 16.07590646082774,
+          "COVERAGE": 0.3073757955671823,
+          "LOAD_IMBALANCE": 0.2
+        },
+        "constraints_satisfied": true
+      },
+      "reasoning": "Iteration 0: To decrease RX_POWER, we need to reduce the power of the transmitters. Since the target is to decrease RX_POWER by an unspecified amount, we will apply a moderate reduction of 2 dBm to both active transmitters (tx0 and tx1) to start, as this will weaken the signal without severely impacting coverage or SINR. Further adjustments can be made based on KPI feedback.\n  Predicted: RX_POWER=-56.50 dBm, SINR=16.08 dB\n\nIteration 1: The target KPI of decreasing RX_POWER is not specific, but given the current RX_POWER of -56.50 dBm is lower than the threshold of -47.27 dBm, and the coverage is 30.7% which might not be sufficient for the critical priority in the Kartal area. However, since the specific target for RX_POWER decrease is not given, the focus shifts towards ensuring coverage and SINR are within manageable levels while keeping an eye on the load imbalance. The current configuration seems to be overshooting the RX_POWER target threshold, and the SINR is at a relatively comfortable level. Given the load imbalance of 0.200, adjusting angles or power could help, but first, reducing power slightly to decrease the overshoot and then reassessing would be prudent. Hence, reducing the power of tx0 and tx1 by 1 dBm each is proposed as a refinement to adjust the configuration towards potentially better coverage and efficiency without overstepping the RX_POWER threshold significantly.\n  Predicted: RX_POWER=-56.50 dBm, SINR=16.08 dB",
+      "result_id": "opt_20260209_093246",
+      "priority": "CRITICAL",
+      "iterations": 2,
+      "surrogate_predictions": [
+        {
+          "RX_POWER": -56.50302173047335,
+          "SINR": 16.07590646082774,
+          "COVERAGE": 0.3073757955671823,
+          "LOAD_IMBALANCE": 0.2
+        },
+        {
+          "RX_POWER": -56.50302173047335,
+          "SINR": 16.07590646082774,
+          "COVERAGE": 0.3073757955671823,
+          "LOAD_IMBALANCE": 0.2
+        }
+      ]
+    },
+    "rejected_result_ids": [
+      "opt_20260209_093130"
+    ],
+    "resolution_notes": "CRITICAL priority takes precedence",
+    "conflict_summary": "4 conflicts detected: 2 parameter conflicts, 1 resource contention",
+    "conflict_resolution_summary": "CRITICAL priority intent selected",
+    "reasoning": "Result opt_20260209_093246 is chosen due to its CRITICAL priority, which always takes precedence. Although Result opt_20260209_093130 is ACTIVE and has a HIGH priority, CRITICAL priority cannot be compromised. Rejecting Result opt_20260209_093130 to ensure network stability and compliance with safety-critical operations. Network stability is prioritized by selecting the CRITICAL intent, which addresses potential emergency situations.",
+    "tie_breaking_rule_used": null
+  },
+  "step5_final_output": {
+    "workflow_id": "workflow_20260209_093244",
+    "timestamp": "2026-02-09T09:32:55.532847",
+    "resolution_strategy": "PRIORITY",
+    "selected_intent": "opt_20260209_093246",
+    "selected_priority": "CRITICAL",
+    "selected_config": {
+      "user_set_id": 0,
+      "K_users": 800,
+      "rx_power_thr_dBm": -47.27,
+      "total_tx_power_watt": 20.0,
+      "tx0_on": true,
+      "tx0_P_dBm": 40.0,
+      "tx0_dAz": -15.0,
+      "tx0_dEl": 0.0,
+      "tx1_on": true,
+      "tx1_P_dBm": 40.0,
+      "tx1_dAz": 15.0,
+      "tx1_dEl": 0.0,
+      "tx2_on": false,
+      "tx2_P_dBm": 30.0,
+      "tx2_dAz": 0.0,
+      "tx2_dEl": 0.0,
+      "tx3_on": false,
+      "tx3_P_dBm": 30.0,
+      "tx3_dAz": 0.0,
+      "tx3_dEl": 0.0
+    },
+    "all_intents": [
+      {
+        "test_name": "optimization",
+        "passed": true,
+        "input": {
+          "target_area": "Kartal",
+          "target_kpis": [
+            "RX_POWER"
+          ],
+          "kpi_thresholds": [
+            {
+              "kpi": "RX_POWER",
+              "operator": "DELTA_DOWN",
+              "delta": 5,
+              "unit": "dBm"
+            }
+          ],
+          "time_constraint_start": "2026-02-05T15:00:00",
+          "time_constraint_end": "2026-02-05T17:00:00",
+          "priority": "CRITICAL",
+          "confidence": 0.95
+        },
+        "output": {
+          "selected_config_id": 1,
+          "changes": [
+            {
+              "parameter": "total_tx_power_watt",
+              "before": 0.0,
+              "change": 20.0
+            },
+            {
+              "parameter": "tx0_on",
+              "before": false,
+              "change": "True"
+            },
+            {
+              "parameter": "tx0_P_dBm",
+              "before": 30.0,
+              "change": 10.0
+            },
+            {
+              "parameter": "tx0_dAz",
+              "before": 0.0,
+              "change": -15.0
+            },
+            {
+              "parameter": "tx1_on",
+              "before": false,
+              "change": "True"
+            },
+            {
+              "parameter": "tx1_P_dBm",
+              "before": 30.0,
+              "change": 10.0
+            },
+            {
+              "parameter": "tx1_dAz",
+              "before": 0.0,
+              "change": 15.0
+            }
+          ],
+          "final_config": {
+            "user_set_id": 0,
+            "K_users": 800,
+            "rx_power_thr_dBm": -47.27,
+            "total_tx_power_watt": 20.0,
+            "tx0_on": true,
+            "tx0_P_dBm": 40.0,
+            "tx0_dAz": -15.0,
+            "tx0_dEl": 0.0,
+            "tx1_on": true,
+            "tx1_P_dBm": 40.0,
+            "tx1_dAz": 15.0,
+            "tx1_dEl": 0.0,
+            "tx2_on": false,
+            "tx2_P_dBm": 30.0,
+            "tx2_dAz": 0.0,
+            "tx2_dEl": 0.0,
+            "tx3_on": false,
+            "tx3_P_dBm": 30.0,
+            "tx3_dAz": 0.0,
+            "tx3_dEl": 0.0
+          },
+          "expected_kpis": {
+            "RX_POWER": -56.50302173047335,
+            "SINR": 16.07590646082774,
+            "COVERAGE": 0.3073757955671823,
+            "LOAD_IMBALANCE": 0.2
+          },
+          "constraints_satisfied": true
+        },
+        "reasoning": "Iteration 0: To decrease RX_POWER, we need to reduce the power of the transmitters. Since the target is to decrease RX_POWER by an unspecified amount, we will apply a moderate reduction of 2 dBm to both active transmitters (tx0 and tx1) to start, as this will weaken the signal without severely impacting coverage or SINR. Further adjustments can be made based on KPI feedback.\n  Predicted: RX_POWER=-56.50 dBm, SINR=16.08 dB\n\nIteration 1: The target KPI of decreasing RX_POWER is not specific, but given the current RX_POWER of -56.50 dBm is lower than the threshold of -47.27 dBm, and the coverage is 30.7% which might not be sufficient for the critical priority in the Kartal area. However, since the specific target for RX_POWER decrease is not given, the focus shifts towards ensuring coverage and SINR are within manageable levels while keeping an eye on the load imbalance. The current configuration seems to be overshooting the RX_POWER target threshold, and the SINR is at a relatively comfortable level. Given the load imbalance of 0.200, adjusting angles or power could help, but first, reducing power slightly to decrease the overshoot and then reassessing would be prudent. Hence, reducing the power of tx0 and tx1 by 1 dBm each is proposed as a refinement to adjust the configuration towards potentially better coverage and efficiency without overstepping the RX_POWER threshold significantly.\n  Predicted: RX_POWER=-56.50 dBm, SINR=16.08 dB",
+        "result_id": "opt_20260209_093246",
+        "priority": "CRITICAL",
+        "iterations": 2,
+        "surrogate_predictions": [
+          {
+            "RX_POWER": -56.50302173047335,
+            "SINR": 16.07590646082774,
+            "COVERAGE": 0.3073757955671823,
+            "LOAD_IMBALANCE": 0.2
+          },
+          {
+            "RX_POWER": -56.50302173047335,
+            "SINR": 16.07590646082774,
+            "COVERAGE": 0.3073757955671823,
+            "LOAD_IMBALANCE": 0.2
+          }
+        ]
+      }
+    ],
+    "rejected_intents": [
+      "opt_20260209_093130"
+    ],
+    "execution_log": [
+      "\u2705 Intent parsed by LLM Agent",
+      "\u2705 Optimization by Hybrid Agent (Surrogate Model + LLM)",
+      "\u2705 Conflicts detected by LLM Agent",
+      "\u2705 Resolution by PRIORITY strategy",
+      "\u2705 Active intents updated (1 total)",
+      "\u2705 Workflow finalized and saved"
+    ]
+  }
+}

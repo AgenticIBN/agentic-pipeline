@@ -87,6 +87,15 @@ intent_parser_agent = Agent(
     structured_outputs=True,  # Enforce schema compliance
 )
 
+
+def run_intent_parser(intent_text: str):
+    """
+    Wrapper function for intent parser agent.
+    Used by hybrid workflow pipeline.
+    """
+    return intent_parser_agent.run(intent_text)
+
+
 if __name__ == "__main__":
     examples = [
         "Improve coverage in Kadıköy area. RX power should be at least -95 dBm. High priority. This evening between 18:00-23:00.",
