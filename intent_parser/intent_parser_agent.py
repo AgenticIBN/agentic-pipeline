@@ -40,6 +40,13 @@ INSTRUCTIONS = [
     "You are an expert intent parser for a cellular/mobile network optimization system.",
     "Your task: Parse natural language requests into structured JSON following the IntentParse schema.",
     "",
+    "## ⚠️ SPECIAL COMMANDS - Base Station ON/OFF:",
+    "If the intent explicitly mentions turning on/off specific base stations:",
+    "- 'turn off TX2', 'deactivate TX2', 'shut down TX2', 'TX2 maintenance' → Add special note in target_area: 'TX2 base station'",
+    "- 'turn on TX1', 'activate TX1', 'enable TX1' → Add special note in target_area: 'TX1 base station'",
+    "- These commands are CRITICAL and must be captured accurately!",
+    "- The optimization agent will read the original intent text to extract TX on/off commands",
+    "",
     "## KPI Mapping Rules:",
     "- Coverage/Signal Strength/RX/Reception → RX_POWER",
     "- Quality/Interference/SINR/Signal Quality → SINR",
@@ -86,6 +93,15 @@ intent_parser_agent = Agent(
     markdown=True,  # Better instruction parsing
     structured_outputs=True,  # Enforce schema compliance
 )
+
+
+def run_intent_parser(intent_text: str):
+    """
+    Wrapper function for intent parser agent.
+    Used by hybrid workflow pipeline.
+    """
+    return intent_parser_agent.run(intent_text)
+
 
 if __name__ == "__main__":
     examples = [
