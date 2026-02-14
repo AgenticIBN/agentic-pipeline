@@ -1,0 +1,720 @@
+{
+  "workflow_id": "workflow_20260213_171405",
+  "workflow_type": "HYBRID (Surrogate Model + LLM)",
+  "timestamp": "2026-02-13T17:14:16.518285",
+  "input": {
+    "intent_text": "There is high data demand in park region between 10 a.m. - 12 p.m. Maximize throughput with higher power. Priority is high",
+    "strategy": "PRIORITY"
+  },
+  "step1_intent_parse": {
+    "target_area": "park region",
+    "target_kpis": [
+      "THROUGHPUT_5P",
+      "RX_POWER"
+    ],
+    "kpi_thresholds": [
+      {
+        "kpi": "THROUGHPUT_5P",
+        "operator": "TARGET",
+        "value": null,
+        "unit": "Mbps"
+      },
+      {
+        "kpi": "RX_POWER",
+        "operator": "DELTA_UP",
+        "delta": null,
+        "unit": "dBm"
+      }
+    ],
+    "time_constraint_start": "2026-02-05T10:00:00",
+    "time_constraint_end": "2026-02-05T12:00:00",
+    "priority": "HIGH",
+    "confidence": 0.9,
+    "current_config": {
+      "tx0_on": false,
+      "tx0_P_dBm": 30.0,
+      "tx0_dAz": 0.0,
+      "tx0_dEl": 0.0,
+      "tx1_on": false,
+      "tx1_P_dBm": 30.0,
+      "tx1_dAz": 0.0,
+      "tx1_dEl": 0.0,
+      "tx2_on": false,
+      "tx2_P_dBm": 30.0,
+      "tx2_dAz": 0.0,
+      "tx2_dEl": 0.0,
+      "tx3_on": false,
+      "tx3_P_dBm": 30.0,
+      "tx3_dAz": 0.0,
+      "tx3_dEl": 0.0
+    }
+  },
+  "step2_hybrid_optimization": {
+    "test_name": "optimization",
+    "passed": true,
+    "input": {
+      "target_area": "park region",
+      "target_kpis": [
+        "THROUGHPUT_5P",
+        "RX_POWER"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "THROUGHPUT_5P",
+          "operator": "TARGET",
+          "value": null,
+          "unit": "Mbps"
+        },
+        {
+          "kpi": "RX_POWER",
+          "operator": "DELTA_UP",
+          "delta": null,
+          "unit": "dBm"
+        }
+      ],
+      "time_constraint_start": "2026-02-05T10:00:00",
+      "time_constraint_end": "2026-02-05T12:00:00",
+      "priority": "HIGH",
+      "confidence": 0.9,
+      "current_config": {
+        "tx0_on": false,
+        "tx0_P_dBm": 30.0,
+        "tx0_dAz": 0.0,
+        "tx0_dEl": 0.0,
+        "tx1_on": false,
+        "tx1_P_dBm": 30.0,
+        "tx1_dAz": 0.0,
+        "tx1_dEl": 0.0,
+        "tx2_on": false,
+        "tx2_P_dBm": 30.0,
+        "tx2_dAz": 0.0,
+        "tx2_dEl": 0.0,
+        "tx3_on": false,
+        "tx3_P_dBm": 30.0,
+        "tx3_dAz": 0.0,
+        "tx3_dEl": 0.0
+      }
+    },
+    "output": {
+      "selected_config_id": 1,
+      "changes": [
+        {
+          "parameter": "tx0_on",
+          "before": false,
+          "change": "True"
+        },
+        {
+          "parameter": "tx0_P_dBm",
+          "before": 30.0,
+          "change": 16.0
+        },
+        {
+          "parameter": "tx1_on",
+          "before": false,
+          "change": "True"
+        },
+        {
+          "parameter": "tx1_P_dBm",
+          "before": 30.0,
+          "change": 16.0
+        },
+        {
+          "parameter": "tx1_dAz",
+          "before": 0.0,
+          "change": 15.0
+        },
+        {
+          "parameter": "tx2_on",
+          "before": false,
+          "change": "True"
+        },
+        {
+          "parameter": "tx2_P_dBm",
+          "before": 30.0,
+          "change": 16.0
+        },
+        {
+          "parameter": "tx2_dAz",
+          "before": 0.0,
+          "change": 45.0
+        },
+        {
+          "parameter": "tx3_on",
+          "before": false,
+          "change": "True"
+        },
+        {
+          "parameter": "tx3_P_dBm",
+          "before": 30.0,
+          "change": 16.0
+        },
+        {
+          "parameter": "total_tx_power_watt",
+          "before": 0.0,
+          "change": 159.24286822139894
+        }
+      ],
+      "final_config": {
+        "tx0_on": true,
+        "tx0_P_dBm": 46.0,
+        "tx0_dAz": 0.0,
+        "tx0_dEl": 0.0,
+        "tx1_on": true,
+        "tx1_P_dBm": 46.0,
+        "tx1_dAz": 15.0,
+        "tx1_dEl": 0.0,
+        "tx2_on": true,
+        "tx2_P_dBm": 46.0,
+        "tx2_dAz": 45.0,
+        "tx2_dEl": 0.0,
+        "tx3_on": true,
+        "tx3_P_dBm": 46.0,
+        "tx3_dAz": 0.0,
+        "tx3_dEl": 0.0,
+        "total_tx_power_watt": 159.24286822139894
+      },
+      "current_config": {
+        "user_set_id": 0,
+        "K_users": 800,
+        "rx_power_thr_dBm": -47.27,
+        "total_tx_power_watt": 0.0,
+        "tx0_on": false,
+        "tx0_P_dBm": 30.0,
+        "tx0_dAz": 0.0,
+        "tx0_dEl": 0.0,
+        "tx1_on": false,
+        "tx1_P_dBm": 30.0,
+        "tx1_dAz": 0.0,
+        "tx1_dEl": 0.0,
+        "tx2_on": false,
+        "tx2_P_dBm": 30.0,
+        "tx2_dAz": 0.0,
+        "tx2_dEl": 0.0,
+        "tx3_on": false,
+        "tx3_P_dBm": 30.0,
+        "tx3_dAz": 0.0,
+        "tx3_dEl": 0.0
+      },
+      "expected_kpis": {
+        "RX_POWER": -47.30795338088724,
+        "SINR": -2.308757900185186,
+        "COVERAGE": 0.9229631846333305,
+        "THROUGHPUT_5P": 1.3177407645709172,
+        "LOAD_IMBALANCE": 8.101866965845167,
+        "ENERGY_WATT": 159.24286822139894
+      },
+      "current_kpis": {
+        "RX_POWER": -56.50161554012266,
+        "SINR": 23.94461842576336,
+        "COVERAGE": 0.29262785170214495,
+        "THROUGHPUT_5P": 4.026721425766606,
+        "LOAD_IMBALANCE": 0.0,
+        "ENERGY_WATT": 0.0
+      },
+      "constraints_satisfied": true
+    },
+    "reasoning": "Iteration 0: Given the current baseline configuration with all transmitters off and low RX_POWER, the first step is to increase RX_POWER by turning on transmitters and increasing their power. We start with two transmitters to balance coverage and interference. Both tx0 and tx1 are turned on with a moderate power increase of 11 dBm to 41 dBm. Additionally, tx1's azimuth angle is adjusted by +15 degrees to introduce angle diversity and improve coverage across the park region without significantly increasing interference.\n  Predicted: RX_POWER=-56.66 dBm, SINR=15.26 dB\n\nIteration 1: The current configuration does not meet the target KPIs, particularly the RX_POWER and COVERAGE. The RX_POWER is -56.66 dBm and the COVERAGE is 29.1%, which are lower than expected. To improve RX_POWER and COVERAGE, we need to increase the power of the active transmitters (tx0 and tx1) by a small amount (2 dBm), activate another transmitter (tx2), and adjust its power and angle. The power of tx2 is set to 38 dBm and its angle is set to 45 degrees to provide a more diverse coverage.\n  Predicted: RX_POWER=-49.53 dBm, SINR=-1.20 dB\n\nIteration 2: Current RX_POWER is -49.53 dBm, which indicates a coverage issue. Increasing power on active TXs (tx0, tx1) and activating another TX (tx3) with a suitable power level should help improve the RX_POWER and overall coverage. SINR is also low, suggesting interference. However, given the low RX_POWER, increasing power and adding another TX might help improve SINR as well by increasing the signal strength relative to interference.\n  Predicted: RX_POWER=-47.60 dBm, SINR=-2.24 dB\n\nIteration 3: The target KPIs are not met because the RX_POWER is very low (-47.60 dBm). To improve RX_POWER, we need to increase the power of the transmitters. We will increase the power of tx0 and tx1 by 1 dBm. This should improve the RX_POWER without overshooting. We will also monitor SINR, COVERAGE, and LOAD_IMBALANCE to ensure they are within acceptable limits after the refinement.\n  Predicted: RX_POWER=-47.31 dBm, SINR=-2.31 dB",
+    "result_id": "opt_20260213_171407",
+    "priority": "HIGH",
+    "iterations": 4,
+    "surrogate_predictions": [
+      {
+        "RX_POWER": -56.66455772461624,
+        "SINR": 15.258860502020461,
+        "COVERAGE": 0.2909889979770931,
+        "LOAD_IMBALANCE": 13.456211969017337,
+        "THROUGHPUT_5P": 3.0377346638340814,
+        "ENERGY_WATT": 25.17850823588335
+      },
+      {
+        "RX_POWER": -49.53307551186547,
+        "SINR": -1.2028855070266402,
+        "COVERAGE": 0.7159920723929093,
+        "LOAD_IMBALANCE": 15.537209843546933,
+        "THROUGHPUT_5P": 1.1396274533367778,
+        "ENERGY_WATT": 79.71596335472734
+      },
+      {
+        "RX_POWER": -47.59977605751305,
+        "SINR": -2.236148558591685,
+        "COVERAGE": 0.902207060182483,
+        "LOAD_IMBALANCE": 8.079878179332049,
+        "THROUGHPUT_5P": 1.2874647115419742,
+        "ENERGY_WATT": 142.86698731406705
+      },
+      {
+        "RX_POWER": -47.30795338088724,
+        "SINR": -2.308757900185186,
+        "COVERAGE": 0.9229631846333305,
+        "LOAD_IMBALANCE": 8.101866965845167,
+        "THROUGHPUT_5P": 1.3177407645709172,
+        "ENERGY_WATT": 159.24286822139894
+      }
+    ]
+  },
+  "step3_conflict_detection": {
+    "is_conflicted": false,
+    "conflict_summary": "No active intents to conflict with",
+    "num_conflicts": 0,
+    "details": [],
+    "resolution_recommendation": "PRIORITY",
+    "conflicting_result_ids": [],
+    "reasoning": "No conflicts detected since there are no active intents in the system."
+  },
+  "step4_resolution": {
+    "conflict_detected": false,
+    "resolution_strategy": "PRIORITY",
+    "winning_result_id": "opt_20260213_171407",
+    "winning_priority": "HIGH",
+    "winning_config": {
+      "test_name": "optimization",
+      "passed": true,
+      "input": {
+        "target_area": "park region",
+        "target_kpis": [
+          "THROUGHPUT_5P",
+          "RX_POWER"
+        ],
+        "kpi_thresholds": [
+          {
+            "kpi": "THROUGHPUT_5P",
+            "operator": "TARGET",
+            "value": null,
+            "unit": "Mbps"
+          },
+          {
+            "kpi": "RX_POWER",
+            "operator": "DELTA_UP",
+            "delta": null,
+            "unit": "dBm"
+          }
+        ],
+        "time_constraint_start": "2026-02-05T10:00:00",
+        "time_constraint_end": "2026-02-05T12:00:00",
+        "priority": "HIGH",
+        "confidence": 0.9,
+        "current_config": {
+          "tx0_on": false,
+          "tx0_P_dBm": 30.0,
+          "tx0_dAz": 0.0,
+          "tx0_dEl": 0.0,
+          "tx1_on": false,
+          "tx1_P_dBm": 30.0,
+          "tx1_dAz": 0.0,
+          "tx1_dEl": 0.0,
+          "tx2_on": false,
+          "tx2_P_dBm": 30.0,
+          "tx2_dAz": 0.0,
+          "tx2_dEl": 0.0,
+          "tx3_on": false,
+          "tx3_P_dBm": 30.0,
+          "tx3_dAz": 0.0,
+          "tx3_dEl": 0.0
+        }
+      },
+      "output": {
+        "selected_config_id": 1,
+        "changes": [
+          {
+            "parameter": "tx0_on",
+            "before": false,
+            "change": "True"
+          },
+          {
+            "parameter": "tx0_P_dBm",
+            "before": 30.0,
+            "change": 16.0
+          },
+          {
+            "parameter": "tx1_on",
+            "before": false,
+            "change": "True"
+          },
+          {
+            "parameter": "tx1_P_dBm",
+            "before": 30.0,
+            "change": 16.0
+          },
+          {
+            "parameter": "tx1_dAz",
+            "before": 0.0,
+            "change": 15.0
+          },
+          {
+            "parameter": "tx2_on",
+            "before": false,
+            "change": "True"
+          },
+          {
+            "parameter": "tx2_P_dBm",
+            "before": 30.0,
+            "change": 16.0
+          },
+          {
+            "parameter": "tx2_dAz",
+            "before": 0.0,
+            "change": 45.0
+          },
+          {
+            "parameter": "tx3_on",
+            "before": false,
+            "change": "True"
+          },
+          {
+            "parameter": "tx3_P_dBm",
+            "before": 30.0,
+            "change": 16.0
+          },
+          {
+            "parameter": "total_tx_power_watt",
+            "before": 0.0,
+            "change": 159.24286822139894
+          }
+        ],
+        "final_config": {
+          "tx0_on": true,
+          "tx0_P_dBm": 46.0,
+          "tx0_dAz": 0.0,
+          "tx0_dEl": 0.0,
+          "tx1_on": true,
+          "tx1_P_dBm": 46.0,
+          "tx1_dAz": 15.0,
+          "tx1_dEl": 0.0,
+          "tx2_on": true,
+          "tx2_P_dBm": 46.0,
+          "tx2_dAz": 45.0,
+          "tx2_dEl": 0.0,
+          "tx3_on": true,
+          "tx3_P_dBm": 46.0,
+          "tx3_dAz": 0.0,
+          "tx3_dEl": 0.0,
+          "total_tx_power_watt": 159.24286822139894
+        },
+        "current_config": {
+          "user_set_id": 0,
+          "K_users": 800,
+          "rx_power_thr_dBm": -47.27,
+          "total_tx_power_watt": 0.0,
+          "tx0_on": false,
+          "tx0_P_dBm": 30.0,
+          "tx0_dAz": 0.0,
+          "tx0_dEl": 0.0,
+          "tx1_on": false,
+          "tx1_P_dBm": 30.0,
+          "tx1_dAz": 0.0,
+          "tx1_dEl": 0.0,
+          "tx2_on": false,
+          "tx2_P_dBm": 30.0,
+          "tx2_dAz": 0.0,
+          "tx2_dEl": 0.0,
+          "tx3_on": false,
+          "tx3_P_dBm": 30.0,
+          "tx3_dAz": 0.0,
+          "tx3_dEl": 0.0
+        },
+        "expected_kpis": {
+          "RX_POWER": -47.30795338088724,
+          "SINR": -2.308757900185186,
+          "COVERAGE": 0.9229631846333305,
+          "THROUGHPUT_5P": 1.3177407645709172,
+          "LOAD_IMBALANCE": 8.101866965845167,
+          "ENERGY_WATT": 159.24286822139894
+        },
+        "current_kpis": {
+          "RX_POWER": -56.50161554012266,
+          "SINR": 23.94461842576336,
+          "COVERAGE": 0.29262785170214495,
+          "THROUGHPUT_5P": 4.026721425766606,
+          "LOAD_IMBALANCE": 0.0,
+          "ENERGY_WATT": 0.0
+        },
+        "constraints_satisfied": true
+      },
+      "reasoning": "Iteration 0: Given the current baseline configuration with all transmitters off and low RX_POWER, the first step is to increase RX_POWER by turning on transmitters and increasing their power. We start with two transmitters to balance coverage and interference. Both tx0 and tx1 are turned on with a moderate power increase of 11 dBm to 41 dBm. Additionally, tx1's azimuth angle is adjusted by +15 degrees to introduce angle diversity and improve coverage across the park region without significantly increasing interference.\n  Predicted: RX_POWER=-56.66 dBm, SINR=15.26 dB\n\nIteration 1: The current configuration does not meet the target KPIs, particularly the RX_POWER and COVERAGE. The RX_POWER is -56.66 dBm and the COVERAGE is 29.1%, which are lower than expected. To improve RX_POWER and COVERAGE, we need to increase the power of the active transmitters (tx0 and tx1) by a small amount (2 dBm), activate another transmitter (tx2), and adjust its power and angle. The power of tx2 is set to 38 dBm and its angle is set to 45 degrees to provide a more diverse coverage.\n  Predicted: RX_POWER=-49.53 dBm, SINR=-1.20 dB\n\nIteration 2: Current RX_POWER is -49.53 dBm, which indicates a coverage issue. Increasing power on active TXs (tx0, tx1) and activating another TX (tx3) with a suitable power level should help improve the RX_POWER and overall coverage. SINR is also low, suggesting interference. However, given the low RX_POWER, increasing power and adding another TX might help improve SINR as well by increasing the signal strength relative to interference.\n  Predicted: RX_POWER=-47.60 dBm, SINR=-2.24 dB\n\nIteration 3: The target KPIs are not met because the RX_POWER is very low (-47.60 dBm). To improve RX_POWER, we need to increase the power of the transmitters. We will increase the power of tx0 and tx1 by 1 dBm. This should improve the RX_POWER without overshooting. We will also monitor SINR, COVERAGE, and LOAD_IMBALANCE to ensure they are within acceptable limits after the refinement.\n  Predicted: RX_POWER=-47.31 dBm, SINR=-2.31 dB",
+      "result_id": "opt_20260213_171407",
+      "priority": "HIGH",
+      "iterations": 4,
+      "surrogate_predictions": [
+        {
+          "RX_POWER": -56.66455772461624,
+          "SINR": 15.258860502020461,
+          "COVERAGE": 0.2909889979770931,
+          "LOAD_IMBALANCE": 13.456211969017337,
+          "THROUGHPUT_5P": 3.0377346638340814,
+          "ENERGY_WATT": 25.17850823588335
+        },
+        {
+          "RX_POWER": -49.53307551186547,
+          "SINR": -1.2028855070266402,
+          "COVERAGE": 0.7159920723929093,
+          "LOAD_IMBALANCE": 15.537209843546933,
+          "THROUGHPUT_5P": 1.1396274533367778,
+          "ENERGY_WATT": 79.71596335472734
+        },
+        {
+          "RX_POWER": -47.59977605751305,
+          "SINR": -2.236148558591685,
+          "COVERAGE": 0.902207060182483,
+          "LOAD_IMBALANCE": 8.079878179332049,
+          "THROUGHPUT_5P": 1.2874647115419742,
+          "ENERGY_WATT": 142.86698731406705
+        },
+        {
+          "RX_POWER": -47.30795338088724,
+          "SINR": -2.308757900185186,
+          "COVERAGE": 0.9229631846333305,
+          "LOAD_IMBALANCE": 8.101866965845167,
+          "THROUGHPUT_5P": 1.3177407645709172,
+          "ENERGY_WATT": 159.24286822139894
+        }
+      ]
+    },
+    "rejected_result_ids": [],
+    "resolution_notes": "No conflict detected; single result selected based on its priority",
+    "conflict_summary": "No active intents to conflict with; single new optimization result",
+    "conflict_resolution_summary": "",
+    "reasoning": "The winning result, opt_20260213_171407, was selected due to its HIGH priority. Since there were no other results to conflict with, it was chosen by default. The configuration changes aim to improve THROUGHPUT_5P and RX_POWER in the park region. No rejected results, as this was the only optimization result provided. Network stability considerations are inherent in the selection of a single, well-defined configuration change set.",
+    "tie_breaking_rule_used": null
+  },
+  "step5_final_output": {
+    "workflow_id": "workflow_20260213_171405",
+    "timestamp": "2026-02-13T17:14:16.517156",
+    "resolution_strategy": "PRIORITY",
+    "selected_intent": "opt_20260213_171407",
+    "selected_priority": "HIGH",
+    "selected_config": {
+      "tx0_on": true,
+      "tx0_P_dBm": 46.0,
+      "tx0_dAz": 0.0,
+      "tx0_dEl": 0.0,
+      "tx1_on": true,
+      "tx1_P_dBm": 46.0,
+      "tx1_dAz": 15.0,
+      "tx1_dEl": 0.0,
+      "tx2_on": true,
+      "tx2_P_dBm": 46.0,
+      "tx2_dAz": 45.0,
+      "tx2_dEl": 0.0,
+      "tx3_on": true,
+      "tx3_P_dBm": 46.0,
+      "tx3_dAz": 0.0,
+      "tx3_dEl": 0.0,
+      "total_tx_power_watt": 159.24286822139894
+    },
+    "all_intents": [
+      {
+        "test_name": "optimization",
+        "passed": true,
+        "input": {
+          "target_area": "park region",
+          "target_kpis": [
+            "THROUGHPUT_5P",
+            "RX_POWER"
+          ],
+          "kpi_thresholds": [
+            {
+              "kpi": "THROUGHPUT_5P",
+              "operator": "TARGET",
+              "value": null,
+              "unit": "Mbps"
+            },
+            {
+              "kpi": "RX_POWER",
+              "operator": "DELTA_UP",
+              "delta": null,
+              "unit": "dBm"
+            }
+          ],
+          "time_constraint_start": "2026-02-05T10:00:00",
+          "time_constraint_end": "2026-02-05T12:00:00",
+          "priority": "HIGH",
+          "confidence": 0.9,
+          "current_config": {
+            "tx0_on": false,
+            "tx0_P_dBm": 30.0,
+            "tx0_dAz": 0.0,
+            "tx0_dEl": 0.0,
+            "tx1_on": false,
+            "tx1_P_dBm": 30.0,
+            "tx1_dAz": 0.0,
+            "tx1_dEl": 0.0,
+            "tx2_on": false,
+            "tx2_P_dBm": 30.0,
+            "tx2_dAz": 0.0,
+            "tx2_dEl": 0.0,
+            "tx3_on": false,
+            "tx3_P_dBm": 30.0,
+            "tx3_dAz": 0.0,
+            "tx3_dEl": 0.0
+          }
+        },
+        "output": {
+          "selected_config_id": 1,
+          "changes": [
+            {
+              "parameter": "tx0_on",
+              "before": false,
+              "change": "True"
+            },
+            {
+              "parameter": "tx0_P_dBm",
+              "before": 30.0,
+              "change": 16.0
+            },
+            {
+              "parameter": "tx1_on",
+              "before": false,
+              "change": "True"
+            },
+            {
+              "parameter": "tx1_P_dBm",
+              "before": 30.0,
+              "change": 16.0
+            },
+            {
+              "parameter": "tx1_dAz",
+              "before": 0.0,
+              "change": 15.0
+            },
+            {
+              "parameter": "tx2_on",
+              "before": false,
+              "change": "True"
+            },
+            {
+              "parameter": "tx2_P_dBm",
+              "before": 30.0,
+              "change": 16.0
+            },
+            {
+              "parameter": "tx2_dAz",
+              "before": 0.0,
+              "change": 45.0
+            },
+            {
+              "parameter": "tx3_on",
+              "before": false,
+              "change": "True"
+            },
+            {
+              "parameter": "tx3_P_dBm",
+              "before": 30.0,
+              "change": 16.0
+            },
+            {
+              "parameter": "total_tx_power_watt",
+              "before": 0.0,
+              "change": 159.24286822139894
+            }
+          ],
+          "final_config": {
+            "tx0_on": true,
+            "tx0_P_dBm": 46.0,
+            "tx0_dAz": 0.0,
+            "tx0_dEl": 0.0,
+            "tx1_on": true,
+            "tx1_P_dBm": 46.0,
+            "tx1_dAz": 15.0,
+            "tx1_dEl": 0.0,
+            "tx2_on": true,
+            "tx2_P_dBm": 46.0,
+            "tx2_dAz": 45.0,
+            "tx2_dEl": 0.0,
+            "tx3_on": true,
+            "tx3_P_dBm": 46.0,
+            "tx3_dAz": 0.0,
+            "tx3_dEl": 0.0,
+            "total_tx_power_watt": 159.24286822139894
+          },
+          "current_config": {
+            "user_set_id": 0,
+            "K_users": 800,
+            "rx_power_thr_dBm": -47.27,
+            "total_tx_power_watt": 0.0,
+            "tx0_on": false,
+            "tx0_P_dBm": 30.0,
+            "tx0_dAz": 0.0,
+            "tx0_dEl": 0.0,
+            "tx1_on": false,
+            "tx1_P_dBm": 30.0,
+            "tx1_dAz": 0.0,
+            "tx1_dEl": 0.0,
+            "tx2_on": false,
+            "tx2_P_dBm": 30.0,
+            "tx2_dAz": 0.0,
+            "tx2_dEl": 0.0,
+            "tx3_on": false,
+            "tx3_P_dBm": 30.0,
+            "tx3_dAz": 0.0,
+            "tx3_dEl": 0.0
+          },
+          "expected_kpis": {
+            "RX_POWER": -47.30795338088724,
+            "SINR": -2.308757900185186,
+            "COVERAGE": 0.9229631846333305,
+            "THROUGHPUT_5P": 1.3177407645709172,
+            "LOAD_IMBALANCE": 8.101866965845167,
+            "ENERGY_WATT": 159.24286822139894
+          },
+          "current_kpis": {
+            "RX_POWER": -56.50161554012266,
+            "SINR": 23.94461842576336,
+            "COVERAGE": 0.29262785170214495,
+            "THROUGHPUT_5P": 4.026721425766606,
+            "LOAD_IMBALANCE": 0.0,
+            "ENERGY_WATT": 0.0
+          },
+          "constraints_satisfied": true
+        },
+        "reasoning": "Iteration 0: Given the current baseline configuration with all transmitters off and low RX_POWER, the first step is to increase RX_POWER by turning on transmitters and increasing their power. We start with two transmitters to balance coverage and interference. Both tx0 and tx1 are turned on with a moderate power increase of 11 dBm to 41 dBm. Additionally, tx1's azimuth angle is adjusted by +15 degrees to introduce angle diversity and improve coverage across the park region without significantly increasing interference.\n  Predicted: RX_POWER=-56.66 dBm, SINR=15.26 dB\n\nIteration 1: The current configuration does not meet the target KPIs, particularly the RX_POWER and COVERAGE. The RX_POWER is -56.66 dBm and the COVERAGE is 29.1%, which are lower than expected. To improve RX_POWER and COVERAGE, we need to increase the power of the active transmitters (tx0 and tx1) by a small amount (2 dBm), activate another transmitter (tx2), and adjust its power and angle. The power of tx2 is set to 38 dBm and its angle is set to 45 degrees to provide a more diverse coverage.\n  Predicted: RX_POWER=-49.53 dBm, SINR=-1.20 dB\n\nIteration 2: Current RX_POWER is -49.53 dBm, which indicates a coverage issue. Increasing power on active TXs (tx0, tx1) and activating another TX (tx3) with a suitable power level should help improve the RX_POWER and overall coverage. SINR is also low, suggesting interference. However, given the low RX_POWER, increasing power and adding another TX might help improve SINR as well by increasing the signal strength relative to interference.\n  Predicted: RX_POWER=-47.60 dBm, SINR=-2.24 dB\n\nIteration 3: The target KPIs are not met because the RX_POWER is very low (-47.60 dBm). To improve RX_POWER, we need to increase the power of the transmitters. We will increase the power of tx0 and tx1 by 1 dBm. This should improve the RX_POWER without overshooting. We will also monitor SINR, COVERAGE, and LOAD_IMBALANCE to ensure they are within acceptable limits after the refinement.\n  Predicted: RX_POWER=-47.31 dBm, SINR=-2.31 dB",
+        "result_id": "opt_20260213_171407",
+        "priority": "HIGH",
+        "iterations": 4,
+        "surrogate_predictions": [
+          {
+            "RX_POWER": -56.66455772461624,
+            "SINR": 15.258860502020461,
+            "COVERAGE": 0.2909889979770931,
+            "LOAD_IMBALANCE": 13.456211969017337,
+            "THROUGHPUT_5P": 3.0377346638340814,
+            "ENERGY_WATT": 25.17850823588335
+          },
+          {
+            "RX_POWER": -49.53307551186547,
+            "SINR": -1.2028855070266402,
+            "COVERAGE": 0.7159920723929093,
+            "LOAD_IMBALANCE": 15.537209843546933,
+            "THROUGHPUT_5P": 1.1396274533367778,
+            "ENERGY_WATT": 79.71596335472734
+          },
+          {
+            "RX_POWER": -47.59977605751305,
+            "SINR": -2.236148558591685,
+            "COVERAGE": 0.902207060182483,
+            "LOAD_IMBALANCE": 8.079878179332049,
+            "THROUGHPUT_5P": 1.2874647115419742,
+            "ENERGY_WATT": 142.86698731406705
+          },
+          {
+            "RX_POWER": -47.30795338088724,
+            "SINR": -2.308757900185186,
+            "COVERAGE": 0.9229631846333305,
+            "LOAD_IMBALANCE": 8.101866965845167,
+            "THROUGHPUT_5P": 1.3177407645709172,
+            "ENERGY_WATT": 159.24286822139894
+          }
+        ]
+      }
+    ],
+    "rejected_intents": [],
+    "merged_intents": [],
+    "execution_log": [
+      "\u2705 Intent parsed by LLM Agent",
+      "\u2705 Optimization by Hybrid Agent (Surrogate Model + LLM)",
+      "\u2705 Conflicts detected by LLM Agent",
+      "\u2705 Resolution by PRIORITY strategy",
+      "\u2705 Active intents updated (1 total)",
+      "\u2705 Workflow finalized and saved"
+    ]
+  }
+}

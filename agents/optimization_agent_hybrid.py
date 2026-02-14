@@ -38,6 +38,15 @@ load_dotenv()
 
 
 # ============================================================================
+# POWER CONSTRAINTS
+# ============================================================================
+
+MAX_POWER_DBM = 46.0  # Maximum realistic power for macro cell base station (40W)
+MIN_POWER_DBM = 20.0  # Minimum power (0.1W)
+MAX_POWER_CHANGE_DBM = 16.0  # Maximum single-step power change to prevent extreme jumps
+
+
+# ============================================================================
 # RESPONSE SCHEMAS
 # ============================================================================
 
@@ -107,11 +116,34 @@ You are an expert network optimization engineer designing base-station configura
 ## Your Task:
 Design an optimal configuration to achieve the target KPIs specified in the intent.
 
+⚠️ CRITICAL: If intent explicitly says "turn off TX[N]" or "turn on TX[N]" or "deactivate TX[N]" or "activate TX[N]":
+- You MUST include that specific change in your configuration!
+- Example: "turn off TX2" → MUST set tx2_on=False
+- Example: "activate TX1 and TX3" → MUST set tx1_on=True and tx3_on=True
+- This is NON-NEGOTIABLE and overrides all other optimization considerations!
+
+⚠️ IMPORTANT: If intent says "all available base stations", "all transmitters", "maximize with all TX":
+- You MUST activate ALL transmitters (tx0, tx1, tx2, tx3)!
+- Example: "maximize coverage with all available base stations" → Set tx0_on=True, tx1_on=True, tx2_on=True, tx3_on=True
+- Unless explicitly told to turn OFF a specific TX, keep all TXs ON for "all available" requests
+
+🔴 CRITICAL RULE: DO NOT turn off transmitters unless:
+  1. Intent explicitly says "turn off TX[N]" or "deactivate TX[N]", OR
+  2. Absolutely necessary for SINR optimization (too much interference), OR  
+  3. Energy saving is the PRIMARY goal AND current config has excessive power
+- Default behavior: Keep transmitters ON, adjust power/angles instead
+
 ## Configuration Parameters (per transmitter tx0-tx3):
 - tx{i}_on: Boolean - transmitter on/off (true/false)
-- tx{i}_P_dBm: Float - power in dBm (range: 30-46 dBm)
+- tx{i}_P_dBm: Float - power in dBm (STRICT RANGE: 20-46 dBm, typical: 35-46 dBm)
 - tx{i}_dAz: Float - azimuth angle delta (range: -30 to +30 degrees)
 - tx{i}_dEl: Float - elevation/tilt delta (range: -5 to +5 degrees)
+
+⚠️ CRITICAL POWER CONSTRAINTS:
+- NEVER exceed 46 dBm (40W) - physically unrealistic for macro cells
+- NEVER go below 20 dBm (0.1W) - insufficient coverage
+- Maximum power CHANGE per step: ±16 dBm (to prevent extreme jumps like +40 dBm)
+- Any configuration violating these limits will be automatically corrected
 
 ## Current Configuration (Baseline):
 - All transmitters: OFF or default (tx0_P=30, tx0_dAz=0, tx0_dEl=0)
@@ -120,15 +152,24 @@ Design an optimal configuration to achieve the target KPIs specified in the inte
 - **RX_POWER**: Increases with power (+1 dBm power → +0.8-1.0 dBm RX_POWER)
 - **Coverage**: Increases with more active transmitters and power
 - **SINR**: Balances signal vs interference (too many TX → worse SINR)
-- **THROUGHPUT**: Increases with SINR (Shannon: C = BW * log2(1 + SINR))
+- **THROUGHPUT**: Directly depends on SINR (Shannon: C = BW * log2(1 + SINR))
+  ⚠️ CRITICAL: Activating too many transmitters at high power → HIGH INTERFERENCE → LOW SINR → LOW THROUGHPUT!
+  For throughput maximization: Focus on SINR optimization (2-3 TX with moderate power + angle diversity)
 - **Load Imbalance**: Lower when users spread across multiple transmitters
 - **Energy**: Increases linearly with power and number of active transmitters
 
 ## Design Guidelines:
-1. Start conservative: Activate 1-2 transmitters first
-2. Use moderate power: 40-43 dBm typical
-3. Use angle diversity: Spread azimuth angles for coverage (e.g., -15° and +15°)
-4. Avoid interference: Don't activate all transmitters at max power unless needed
+1. **ALWAYS check baseline first**: If transmitters are already ON with good SINR, DON'T turn them off and back on!
+   - Example: If baseline has tx0_on=True at 35 dBm with SINR=+15 dB, just adjust power/angles
+   - DON'T waste changes on "before: false, change: True" when TX is already ON!
+2. **Respect good baseline SINR**: If current SINR > 10 dB, be VERY careful with power increases
+   - High SINR = good signal quality, don't break it with interference
+   - Small power adjustments (±2-3 dBm) preferred
+3. Use moderate power: 35-43 dBm typical (NEVER exceed 46 dBm!)
+4. Use angle diversity: Spread azimuth angles for coverage (e.g., -15°, +15°, -10°, +10°)
+5. Avoid interference: With 4 active TX, high power (>42 dBm) often causes negative SINR
+6. Power changes: Propose incremental changes (±2-5 dBm typical, max ±16 dBm)
+7. **For THROUGHPUT maximization**: SINR is king! Don't sacrifice positive SINR for coverage
 
 ## Output Format:
 For each change, specify:
@@ -149,20 +190,45 @@ You are an expert network optimization engineer evaluating configuration results
 The surrogate model (trained on 1M+ real simulations) has predicted KPIs for your configuration.
 Evaluate whether the target KPIs are met, and refine if needed.
 
+⚠️ CRITICAL: If the original intent explicitly says "turn off TX[N]" or "turn on TX[N]":
+- You MUST respect that constraint in all refinements!
+- Example: If intent says "turn off TX2", NEVER propose turning TX2 back on
+- This is a HARD CONSTRAINT that cannot be violated!
+
+🔴 CRITICAL RULE: DO NOT propose turning off transmitters unless:
+  1. Original intent explicitly says "turn off TX[N]", OR
+  2. SINR is severely negative (<-2 dB) and interference is killing throughput, OR
+  3. Energy saving is PRIMARY goal AND current power is excessive
+- Default behavior: Keep transmitters ON, adjust power/angles for optimization
+
 ## Evaluation Criteria:
 1. **Target Met**: Compare predicted KPIs vs target thresholds
 2. **Safety**: Ensure no extreme configurations (e.g., all TX at 46 dBm)
 3. **Efficiency**: Prefer minimal changes to achieve target
 
 ## Refinement Strategy:
+- **CRITICAL: Check baseline first!** If baseline had SINR > 10 dB and current SINR < 0 dB:
+  - YOU BROKE IT! Undo power increases, return closer to baseline
+  - Example: Baseline 35 dBm (SINR +15 dB) → Tried 42 dBm (SINR -2 dB) → Go back to 36-37 dBm
 - **Undershooting**: Increase power slightly (+2-3 dBm) or activate another TX
 - **Overshooting**: Decrease power or reduce angle spread
-- **RX_POWER Issues**: Increase power or activate more transmitters
+- **RX_POWER Issues**: Increase power or activate more transmitters (max 46 dBm!)
 - **Coverage Issues**: Activate more transmitters with diverse angles
-- **SINR Issues**: Reduce number of active TXs or adjust angles
-- **THROUGHPUT Issues**: Improve SINR (reduce interference or increase power)
+- **SINR Issues**: 
+  - If SINR turned negative from positive: REDUCE power or number of TXs immediately!
+  - If SINR was already negative: Try different TX combination or angles
+- **THROUGHPUT Issues**: 
+  ⚠️ CRITICAL: Always check current SINR first!
+  - If SINR is POSITIVE (>0 dB): Good signal quality, can try small power increases
+  - If SINR is NEGATIVE (<0 dB): TOO MUCH INTERFERENCE! Must reduce TXs or power
+  - Throughput maximization = SINR optimization (NOT power maximization!)
 - **Load Imbalance**: Adjust angles to spread users more evenly
 - **Energy Issues**: Reduce power, deactivate transmitters, or use fewer active TXs
+
+⚠️ POWER CONSTRAINTS (STRICTLY ENFORCED):
+- Absolute power range: 20-46 dBm
+- Maximum change per refinement: ±16 dBm
+- Typical changes: ±2-5 dBm for fine-tuning
 
 ## Output Format for Refinements:
 For each change, specify:
@@ -258,7 +324,7 @@ class HybridOptimizationAgent:
         return config
     
     def _apply_changes(self, config: Dict, changes: List[ConfigChange]) -> Dict:
-        """Apply configuration changes to baseline config."""
+        """Apply configuration changes to baseline config with power limit validation."""
         new_config = config.copy()
         
         for change in changes:
@@ -276,10 +342,27 @@ class HybridOptimizationAgent:
                 # For numeric, change is the delta
                 before_val = change.before if change.before is not None else config.get(param, 0)
                 if isinstance(change.change, (int, float)):
-                    new_val = float(before_val) + float(change.change)
+                    delta = float(change.change)
+                    
+                    # Enforce maximum change limit for power parameters
+                    if param.endswith("_P_dBm") and abs(delta) > MAX_POWER_CHANGE_DBM:
+                        print(f"⚠️  WARNING: Power change {delta:.1f} dBm exceeds limit. Clamping to ±{MAX_POWER_CHANGE_DBM} dBm")
+                        delta = max(-MAX_POWER_CHANGE_DBM, min(MAX_POWER_CHANGE_DBM, delta))
+                    
+                    new_val = float(before_val) + delta
                 else:
                     # If change is absolute value (shouldn't happen but handle it)
                     new_val = float(change.change)
+                
+                # Enforce power limits for power parameters
+                if param.endswith("_P_dBm"):
+                    if new_val > MAX_POWER_DBM:
+                        print(f"⚠️  WARNING: Power {new_val:.1f} dBm exceeds max {MAX_POWER_DBM} dBm. Clamping.")
+                        new_val = MAX_POWER_DBM
+                    elif new_val < MIN_POWER_DBM:
+                        print(f"⚠️  WARNING: Power {new_val:.1f} dBm below min {MIN_POWER_DBM} dBm. Clamping.")
+                        new_val = MIN_POWER_DBM
+                
                 new_config[param] = new_val
         
         # Update total power
@@ -425,6 +508,31 @@ class HybridOptimizationAgent:
                 }
                 print(f"✓ Baseline KPIs: RX_POWER={baseline_kpis['RX_POWER']:.2f} dBm")
         
+        # If we have a current_config but no baseline_kpis, predict them from current_config
+        if baseline_kpis is None and current_config:
+            # Check if any TX is active
+            any_tx_active = any(current_config.get(f'tx{i}_on', False) for i in range(4))
+            
+            if any_tx_active:
+                print("🔮 Computing baseline KPIs from current_config...")
+                try:
+                    baseline_predictions = self._predict_kpis(current_config)
+                    baseline_kpis = {
+                        "RX_POWER": baseline_predictions.RX_POWER,
+                        "SINR": baseline_predictions.SINR,
+                        "COVERAGE": baseline_predictions.COVERAGE,
+                        "THROUGHPUT_5P": baseline_predictions.THROUGHPUT_5P,
+                        "LOAD_IMBALANCE": baseline_predictions.LOAD_IMBALANCE,
+                        "ENERGY_WATT": baseline_predictions.ENERGY_WATT,
+                    }
+                    print(f"✓ Computed baseline KPIs: RX_POWER={baseline_kpis['RX_POWER']:.2f} dBm, "
+                          f"SINR={baseline_kpis['SINR']:.2f} dB, THROUGHPUT={baseline_kpis['THROUGHPUT_5P']:.2f} Mbps")
+                except Exception as e:
+                    print(f"⚠️ Failed to compute baseline KPIs: {e}")
+            else:
+                print("⚠️ All transmitters OFF in current_config - skipping baseline KPI computation")
+                baseline_kpis = None
+        
         # Storage for iterations
         all_predictions: List[KPIPrediction] = []
         iteration_history = []
@@ -434,6 +542,34 @@ class HybridOptimizationAgent:
         print("-" * 70)
         
         intent_text = self._format_intent(intent)
+        
+        # Extract TX on/off commands from original intent text
+        original_intent_text = intent.get('intent_text', '')
+        tx_commands = []
+        if original_intent_text:
+            import re
+            
+            # Check for "all available" requests
+            all_pattern = r'(all\s+available|all\s+transmitters|all\s+base\s+stations|all\s+tx)'
+            if re.search(all_pattern, original_intent_text, re.IGNORECASE):
+                tx_commands.append(f"⚠️ CRITICAL: Intent says 'all available' - MUST activate ALL transmitters (tx0_on=True, tx1_on=True, tx2_on=True, tx3_on=True)")
+                print(f"🚨 Detected 'ALL AVAILABLE' request - all TXs must be ON")
+            
+            # Detect "turn off/on TX[0-3]" or "deactivate/activate TX[0-3]"
+            off_pattern = r'(turn\s+off|deactivate|shut\s+down|disable|maintenance).*tx(\d)'
+            on_pattern = r'(turn\s+on|activate|enable).*tx(\d)'
+            
+            for match in re.finditer(off_pattern, original_intent_text, re.IGNORECASE):
+                tx_num = match.group(2)
+                tx_commands.append(f"⚠️ CRITICAL: MUST set tx{tx_num}_on=False (intent explicitly says to turn off TX{tx_num})")
+                print(f"🚨 Detected TX OFF command: TX{tx_num}")
+            
+            for match in re.finditer(on_pattern, original_intent_text, re.IGNORECASE):
+                tx_num = match.group(2)
+                tx_commands.append(f"⚠️ CRITICAL: MUST set tx{tx_num}_on=True (intent explicitly says to turn on TX{tx_num})")
+                print(f"🚨 Detected TX ON command: TX{tx_num}")
+        
+        tx_commands_text = "\n".join(tx_commands) if tx_commands else ""
         
         # Format current baseline config for LLM
         baseline_description = []
@@ -447,21 +583,30 @@ class HybridOptimizationAgent:
         
         baseline_text = "\n".join(baseline_description)
         
+        # Count active TXs in baseline
+        active_tx_count = sum(1 for i in range(4) if current_config.get(f'tx{i}_on', False))
+        
         # Add baseline KPIs if available
         baseline_kpis_text = ""
         if baseline_kpis:
+            sinr_quality = "EXCELLENT ✅" if baseline_kpis['SINR'] > 10 else "GOOD ✅" if baseline_kpis['SINR'] > 5 else "FAIR ⚠️" if baseline_kpis['SINR'] > 0 else "POOR ❌ (interference!)"
             baseline_kpis_text = f"""
-CURRENT BASELINE KPIs (from previous optimization):
+⚠️ CURRENT BASELINE KPIs ({active_tx_count} TXs active):
   RX_POWER: {baseline_kpis['RX_POWER']:.2f} dBm
-  SINR: {baseline_kpis['SINR']:.2f} dB
+  SINR: {baseline_kpis['SINR']:.2f} dB ({sinr_quality})
   COVERAGE: {baseline_kpis['COVERAGE']*100:.1f}%
-  LOAD_IMBALANCE: {baseline_kpis['LOAD_IMBALANCE']:.3f}
+  THROUGHPUT: {baseline_kpis['THROUGHPUT_5P']:.2f} Mbps
+  ENERGY: {baseline_kpis['ENERGY_WATT']:.2f} W
+
+⚠️ CRITICAL: If baseline SINR > 10 dB, be VERY careful! Small changes only (±2-3 dBm).
+Don't break good SINR by adding too much power - interference will kill throughput!
 """
         
         design_prompt = f"""
 Design an initial configuration for this intent:
 
 {intent_text}
+{tx_commands_text}
 {baseline_kpis_text}
 CURRENT BASELINE CONFIGURATION:
 {baseline_text}
@@ -544,12 +689,38 @@ If the intent says "INCREASE RX_POWER by X dBm", you must INCREASE the power to 
             print(f"\n📍 Iteration {iteration}/{self.max_iterations}")
             
             # Evaluate current predictions
+            # Build baseline comparison
+            baseline_comparison = ""
+            if baseline_kpis:
+                sinr_change = predictions.SINR - baseline_kpis['SINR']
+                throughput_change = predictions.THROUGHPUT_5P - baseline_kpis['THROUGHPUT_5P']
+                coverage_change = predictions.COVERAGE - baseline_kpis['COVERAGE']
+                
+                sinr_status = "✅ GOOD" if sinr_change >= 0 else f"❌ DEGRADED by {abs(sinr_change):.1f} dB!"
+                throughput_status = "✅" if throughput_change >= 0 else f"❌ DROPPED by {abs(throughput_change):.2f} Mbps"
+                
+                if baseline_kpis['SINR'] > 10 and predictions.SINR < 0:
+                    baseline_comparison = f"""
+⚠️⚠️⚠️ CRITICAL WARNING: YOU BROKE A GOOD BASELINE! ⚠️⚠️⚠️
+Baseline had EXCELLENT SINR ({baseline_kpis['SINR']:.1f} dB) but current is NEGATIVE ({predictions.SINR:.1f} dB)!
+Throughput: {baseline_kpis['THROUGHPUT_5P']:.2f} → {predictions.THROUGHPUT_5P:.2f} Mbps ({throughput_status})
+ACTION REQUIRED: REDUCE power significantly or go back closer to baseline config!
+"""
+                else:
+                    baseline_comparison = f"""
+Comparison vs Baseline:
+  SINR: {baseline_kpis['SINR']:.1f} → {predictions.SINR:.1f} dB ({sinr_status})
+  THROUGHPUT: {baseline_kpis['THROUGHPUT_5P']:.2f} → {predictions.THROUGHPUT_5P:.2f} Mbps ({throughput_status})
+  COVERAGE: {baseline_kpis['COVERAGE']*100:.0f} → {predictions.COVERAGE*100:.0f}% (change: {coverage_change*100:+.0f}%)
+"""
+            
             refinement_prompt = f"""
 Evaluate the current configuration results:
 
 TARGET (from intent):
 {intent_text}
-
+{tx_commands_text}
+{baseline_comparison}
 CURRENT PREDICTIONS (from surrogate model trained on 1M+ simulations):
 - RX_POWER: {predictions.RX_POWER:.2f} dBm
 - SINR: {predictions.SINR:.2f} dB

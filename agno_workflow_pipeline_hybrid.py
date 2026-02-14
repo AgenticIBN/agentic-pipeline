@@ -71,13 +71,13 @@ def get_current_system_config() -> dict:
     
     if not active_intents:
         # No active intents - return default baseline configuration
-        # Başlangıç durumu: TX'ler kapalı, açılar merkezi (0 derece)
+        # Başlangıç durumu: Tüm TX'ler açık, düşük power (35 dBm), açılar merkezi (0 derece)
         print("📌 No active intents found - using default baseline config")
         return {
-            'tx0_on': False, 'tx0_P_dBm': 30.0, 'tx0_dAz': 0.0, 'tx0_dEl': 0.0,
-            'tx1_on': False, 'tx1_P_dBm': 30.0, 'tx1_dAz': 0.0, 'tx1_dEl': 0.0,
-            'tx2_on': False, 'tx2_P_dBm': 30.0, 'tx2_dAz': 0.0, 'tx2_dEl': 0.0,
-            'tx3_on': False, 'tx3_P_dBm': 30.0, 'tx3_dAz': 0.0, 'tx3_dEl': 0.0
+            'tx0_on': True, 'tx0_P_dBm': 35.0, 'tx0_dAz': 0.0, 'tx0_dEl': 0.0,
+            'tx1_on': True, 'tx1_P_dBm': 35.0, 'tx1_dAz': 0.0, 'tx1_dEl': 0.0,
+            'tx2_on': True, 'tx2_P_dBm': 35.0, 'tx2_dAz': 0.0, 'tx2_dEl': 0.0,
+            'tx3_on': True, 'tx3_P_dBm': 35.0, 'tx3_dAz': 0.0, 'tx3_dEl': 0.0
         }
     
     # Get the last active intent (most recent)
@@ -118,10 +118,10 @@ def extract_final_config_from_result(result: dict) -> dict:
     if not base_config:
         # Use default
         base_config = {
-            'tx0_on': False, 'tx0_P_dBm': 30.0, 'tx0_dAz': 0.0, 'tx0_dEl': 0.0,
-            'tx1_on': False, 'tx1_P_dBm': 30.0, 'tx1_dAz': 0.0, 'tx1_dEl': 0.0,
-            'tx2_on': False, 'tx2_P_dBm': 30.0, 'tx2_dAz': 0.0, 'tx2_dEl': 0.0,
-            'tx3_on': False, 'tx3_P_dBm': 30.0, 'tx3_dAz': 0.0, 'tx3_dEl': 0.0
+            'tx0_on': True, 'tx0_P_dBm': 35.0, 'tx0_dAz': 0.0, 'tx0_dEl': 0.0,
+            'tx1_on': True, 'tx1_P_dBm': 35.0, 'tx1_dAz': 0.0, 'tx1_dEl': 0.0,
+            'tx2_on': True, 'tx2_P_dBm': 35.0, 'tx2_dAz': 0.0, 'tx2_dEl': 0.0,
+            'tx3_on': True, 'tx3_P_dBm': 35.0, 'tx3_dAz': 0.0, 'tx3_dEl': 0.0
         }
     
     # Apply changes to base config
@@ -436,6 +436,9 @@ def main():
     print(f"   Target Area: {parsed_intent.get('target_area')}")
     print(f"   Priority: {parsed_intent.get('priority')}")
     print(f"   Target KPIs: {', '.join(parsed_intent.get('target_kpis', []))}")
+    
+    # Add original intent text to parsed intent for optimization agent
+    parsed_intent['intent_text'] = intent_text
     
     # ========================================================================
     # STEP 2: HYBRID OPTIMIZATION (Surrogate + LLM)
