@@ -37,6 +37,7 @@ from agents.optimization_agent_hybrid import run_hybrid_optimization
 from agents.conflict_detector_agent_llm import run_conflict_detection
 from agents.priority_resolution_agent_llm import run_priority_resolution
 from agents.weighted_merge_agent_llm import run_weighted_merge
+from agents.reasoning_agent_llm import run_reasoning_agent
 
 load_dotenv()
 
@@ -218,14 +219,30 @@ def create_hybrid_workflow() -> Workflow:
     # Step 5: Finalization
     def finalize_workflow(
         resolution_result: Dict,
+        conflict_result: Dict,     # <-- YENİ EKLENDİ
+        optimization_result: Dict, # <-- YENİ EKLENDİ
+        intent_text: str,          # <-- YENİ EKLENDİ
         workflow_id: str,
         output_file: str = "active_intents_workflow_hybrid.json",
     ) -> Dict:
         """Finalize workflow and save results."""
-        print("\n" + "="*70)
-        print("📝 STEP 5: FINALIZATION")
-        print("="*70)
         
+        # --- 1. CALL REASONING AGENT ---
+        # Tüm parçaları birleştirip stratejik raporu oluşturuyoruz
+        strategic_report = run_reasoning_agent(
+            intent_text=intent_text,
+            optimization_result=optimization_result,
+            conflict_result=conflict_result,
+            resolution_result=resolution_result
+        )
+        
+        print("\n" + "="*70)
+        print("📝 STEP 5: FINALIZATION & REPORTING")
+        print("="*70)
+        print(f"📢 HEADLINE: {strategic_report.get('decision_headline')}")
+        print(f"📄 SUMMARY: {strategic_report.get('executive_summary')}")
+        
+        # --- 2. STANDARD FINALIZATION LOGIC ---
         # Detect strategy and extract appropriate fields
         strategy = None
         contributing = []  # Initialize for both strategies
@@ -238,70 +255,52 @@ def create_hybrid_workflow() -> Workflow:
         # Handle PRIORITY strategy
         if strategy == "PRIORITY":
             if hasattr(resolution_result, 'winning_result_id'):
-                # Pydantic model
                 result_id = resolution_result.winning_result_id
                 priority = resolution_result.winning_priority
                 full_result = resolution_result.winning_config
                 rejected_ids = resolution_result.rejected_result_ids
             else:
-                # Dict
                 result_id = resolution_result.get('winning_result_id')
                 priority = resolution_result.get('winning_priority')
                 full_result = resolution_result.get('winning_config', {})
                 rejected_ids = resolution_result.get('rejected_result_ids', [])
             
-            print(f"🎯 Resolution Strategy: PRIORITY")
-            print(f"🏆 Winner: {result_id} (Priority: {priority})")
-            
             # Remove rejected intents
             if rejected_ids:
-                print(f"🗑️  Removing {len(rejected_ids)} rejected intent(s)...")
                 remove_rejected_intents(rejected_ids)
             
             # Add winning intent
             if full_result:
-                print(f"➕ Adding winning intent: {result_id}")
                 add_active_intent(full_result)
         
         # Handle WEIGHTED_MERGE strategy
         elif strategy == "WEIGHTED_MERGE":
             if hasattr(resolution_result, 'merged_result_id'):
-                # Pydantic model
                 result_id = resolution_result.merged_result_id
                 full_result = resolution_result.merged_config
                 contributing = resolution_result.contributing_results
             else:
-                # Dict
                 result_id = resolution_result.get('merged_result_id')
                 full_result = resolution_result.get('merged_config', {})
                 contributing = resolution_result.get('contributing_results', [])
             
-            priority = "MERGED"  # Merged results have combined priority
-            rejected_ids = []  # No rejections in merge strategy
+            priority = "MERGED"
             
-            print(f"🎯 Resolution Strategy: WEIGHTED_MERGE")
-            print(f"🔀 Merged Result: {result_id}")
-            print(f"📊 Contributing Intents: {len(contributing)}")
-            for contrib in contributing:
-                if isinstance(contrib, dict):
-                    print(f"   • {contrib.get('id')}: {contrib.get('priority')} (weight: {contrib.get('weight', 0):.2f})")
-                else:
-                    print(f"   • {contrib.id}: {contrib.priority} (weight: {contrib.weight:.2f})")
-            
-            # Remove ALL active intents that were merged
-            active_intents = load_active_intents()
+            # Remove merged intents
             merged_ids = [c.get('id') if isinstance(c, dict) else c.id for c in contributing]
             if merged_ids:
-                print(f"🔄 Replacing {len(merged_ids)} merged intent(s) with single merged result...")
                 remove_rejected_intents(merged_ids)
             
-            # Add merged result as new active intent
+            # Add merged result
             if full_result:
-                print(f"➕ Adding merged intent: {result_id}")
                 add_active_intent(full_result)
         
         else:
-            raise ValueError(f"Unknown resolution strategy: {strategy}")
+            # Fallback
+            result_id = "UNKNOWN"
+            priority = "UNKNOWN"
+            full_result = {}
+            rejected_ids = []
         
         # Load current active intents
         all_intents = load_active_intents()
@@ -313,6 +312,7 @@ def create_hybrid_workflow() -> Workflow:
         final_output = {
             "workflow_id": workflow_id,
             "timestamp": datetime.now().isoformat(),
+            "reasoning_report": strategic_report,  # <-- BURASI EKLENDİ
             "resolution_strategy": strategy,
             "selected_intent": result_id,
             "selected_priority": priority,
@@ -322,25 +322,16 @@ def create_hybrid_workflow() -> Workflow:
             "merged_intents": [c.get('id') if isinstance(c, dict) else c.id for c in contributing] if strategy == "WEIGHTED_MERGE" else [],
             "execution_log": [
                 "✅ Intent parsed by LLM Agent",
-                "✅ Optimization by Hybrid Agent (Surrogate Model + LLM)",
+                "✅ Optimization by Hybrid Agent",
                 "✅ Conflicts detected by LLM Agent",
                 f"✅ Resolution by {strategy} strategy",
-                f"✅ Active intents updated ({len(all_intents)} total)",
+                "✅ Strategic Reasoning Synthesized", # <-- GÜNCELLENDİ
                 "✅ Workflow finalized and saved",
             ],
         }
         
         # Save to file
         save_active_intents(all_intents)
-        
-        print(f"✅ Active intents updated:")
-        print(f"   Total active: {len(all_intents)}")
-        print(f"   Selected: {result_id}")
-        if strategy == "PRIORITY":
-            print(f"   Rejected: {len(rejected_ids)}")
-        elif strategy == "WEIGHTED_MERGE":
-            print(f"   Merged from: {len(contributing)} intent(s)")
-        print(f"   Strategy: {strategy}")
         
         return final_output
     
@@ -552,9 +543,12 @@ def main():
     # STEP 5: FINALIZATION
     # ========================================================================
     final_output = workflow.steps[4].executor(
-        resolution,
-        workflow_id,
-        args.output,
+        resolution_result=resolution,   # Step 4 sonucu
+        conflict_result=conflicts,      # Step 3 sonucu (REASONING İÇİN EKLENDİ)
+        optimization_result=optimization_result, # Step 2 sonucu (REASONING İÇİN EKLENDİ)
+        intent_text=intent_text,        # Step 1 girdisi (REASONING İÇİN EKLENDİ)
+        workflow_id=workflow_id,
+        output_file=args.output,
     )
     
     # Save full workflow result
