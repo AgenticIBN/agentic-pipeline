@@ -556,8 +556,10 @@ class HybridOptimizationAgent:
                 print(f"🚨 Detected 'ALL AVAILABLE' request - all TXs must be ON")
             
             # Detect "turn off/on TX[0-3]" or "deactivate/activate TX[0-3]"
-            off_pattern = r'(turn\s+off|deactivate|shut\s+down|disable|maintenance).*tx(\d)'
+            off_pattern = r'(turn\s+off|deactivate|shut\s+down|disable)\s+(?:transmitter\s+)?tx(\d)'
             on_pattern = r'(turn\s+on|activate|enable).*tx(\d)'
+            param_off_pattern = r'tx(\d)_on\s*(?:=|to|:)\s*(?:False|false|OFF|off|0)'
+            param_on_pattern = r'tx(\d)_on\s*(?:=|to|:)\s*(?:True|true|ON|on|1)'
             
             for match in re.finditer(off_pattern, original_intent_text, re.IGNORECASE):
                 tx_num = match.group(2)

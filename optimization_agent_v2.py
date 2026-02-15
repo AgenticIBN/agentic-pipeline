@@ -185,9 +185,24 @@ class SurrogateModel:
         throughput_mbps = throughput_bps / 1e6
         return float(throughput_mbps)
     
+    #def compute_load_imbalance(self, served_pcts: List[float]) -> float:
+        #"""Compute load imbalance from served percentages."""
+        #return float(np.std(served_pcts))
     def compute_load_imbalance(self, served_pcts: List[float]) -> float:
-        """Compute load imbalance from served percentages."""
-        return float(np.std(served_pcts))
+        n = len(served_pcts)
+        sum_x = sum(served_pcts)
+        sum_x_squared = sum(x**2 for x in served_pcts)
+        
+        if sum_x_squared == 0:
+            return 0.0
+        
+        # Jain's Fairness Index
+        fairness = (sum_x ** 2) / (n * sum_x_squared)
+        
+        # Convert to imbalance (higher = worse)
+        load_imbalance = 1 - fairness
+        
+        return float(load_imbalance)
 
 
 # ============================================================================
