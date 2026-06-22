@@ -1,0 +1,2 @@
+Model,Avg_Latency (s),Avg_Accuracy (vs GT),Total_Energy (Joules),Energy_Per_Query (Joules)
+Qwen2.5-7B,32.337,0.446,,
