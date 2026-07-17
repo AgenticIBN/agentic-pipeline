@@ -1,0 +1,18 @@
+{
+  "raw_text": "Increase RX power in the park to at least -95 dBm.",
+  "target_area": "park",
+  "scenario": "urban_area",
+  "target_kpis": ["RX_POWER"],
+  "kpi_thresholds": [
+    {
+      "kpi": "RX_POWER",
+      "operator": "GTE",
+      "value": -95.0,
+      "unit": "dBm"
+    }
+  ],
+  "time_constraint_start": null,
+  "time_constraint_end": null,
+  "priority": "MEDIUM",
+  "confidence": 0.95
+}
