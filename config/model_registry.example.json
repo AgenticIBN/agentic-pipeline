@@ -1,0 +1,4 @@
+{
+  "urban_area": "models/urban_area_surrogate.joblib",
+  "open_area": "models/open_area_surrogate.joblib"
+}
