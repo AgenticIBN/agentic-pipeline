@@ -10,7 +10,7 @@ import platform
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
@@ -73,6 +73,7 @@ class ExternalPreparedData:
     split_strategy: str
     parameter_bounds: dict[str, dict[str, float]]
     prepared_dir: Path
+    parameter_grid: dict[str, list[float]] = field(default_factory=dict)
 
 
 def _manifest_hash(paths: list[Path]) -> str:
@@ -463,6 +464,35 @@ def parameter_bounds(frame: pd.DataFrame) -> dict[str, dict[str, float]]:
     return bounds
 
 
+# A parameter with more distinct ON-transmitter values than this is treated as continuous: no grid is stored.
+GRID_MAX_VALUES = 64
+_GRID_SOURCES = {"power": "P_dBm", "dAz": "dAz", "dEl": "dEl"}
+
+
+def _update_grid_sets(grid_sets: dict[str, set[float] | None], frame: pd.DataFrame) -> None:
+    for output_name, source_suffix in _GRID_SOURCES.items():
+        current = grid_sets.setdefault(output_name, set())
+        if current is None:
+            continue
+        for index in range(4):
+            on = frame[f"tx{index}_on"].astype(bool).to_numpy()
+            values = frame[f"tx{index}_{source_suffix}"].to_numpy(dtype=float)[on]
+            current.update(float(value) for value in np.unique(np.round(values, 6)))
+        if len(current) > GRID_MAX_VALUES:
+            grid_sets[output_name] = None
+
+
+def _finalize_grid(grid_sets: dict[str, set[float] | None]) -> dict[str, list[float]]:
+    return {name: sorted(values) for name, values in grid_sets.items() if values}
+
+
+def parameter_grid(frame: pd.DataFrame) -> dict[str, list[float]]:
+    """Distinct values each knob takes in the training data, so proposals can be snapped onto them."""
+    grid_sets: dict[str, set[float] | None] = {}
+    _update_grid_sets(grid_sets, frame)
+    return _finalize_grid(grid_sets)
+
+
 def _library_versions() -> dict[str, str]:
     versions = {
         "python": platform.python_version(),
@@ -638,6 +668,7 @@ def _prepare_external_batches(
     row_counts = {name: 0 for name in split_dirs}
     batch_numbers = {name: 0 for name in split_dirs}
     bounds: dict[str, dict[str, float]] = {}
+    grid_sets: dict[str, set[float] | None] = {}
     valid_rows = 0
     columns = list(dict.fromkeys([*RAW_CONFIGURATION_COLUMNS, *target_names]))
 
@@ -664,6 +695,7 @@ def _prepare_external_batches(
             if frame.empty:
                 continue
             _update_streaming_bounds(bounds, frame)
+            _update_grid_sets(grid_sets, frame)
             masks = _streaming_split_masks(frame, split_strategy, seed, test_size)
             x_all = frame[DEFAULT_FEATURES].to_numpy(dtype=np.float32, copy=False)
             y_all = frame[target_names].to_numpy(dtype=np.float32, copy=False)
@@ -701,6 +733,7 @@ def _prepare_external_batches(
         split_strategy=split_strategy,
         parameter_bounds=cleaned_bounds,
         prepared_dir=prepared_dir,
+        parameter_grid=_finalize_grid(grid_sets),
     )
 
 
@@ -897,6 +930,7 @@ def _train_xgboost_external(
             "target_names": target_names,
             "models": models,
             "parameter_bounds": prepared.parameter_bounds,
+            "parameter_grid": prepared.parameter_grid,
             "metrics": metrics,
             "split": {
                 "strategy": prepared.split_strategy,
@@ -1044,6 +1078,7 @@ def train_surrogate(
         "target_names": target_names,
         "models": models,
         "parameter_bounds": parameter_bounds(frame),
+        "parameter_grid": parameter_grid(frame),
         "metrics": metrics,
         "split": {
             "strategy": split.strategy,

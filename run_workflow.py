@@ -20,7 +20,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-path", default=None, help="Override the registry with a specific .joblib artifact")
     parser.add_argument("--strategy", choices=["AUTO", "PRIORITY", "WEIGHTED_MERGE"], default="AUTO")
     parser.add_argument("--runtime", choices=["agno", "deterministic"], default=None)
-    parser.add_argument("--max-iterations", type=int, default=None)
+    parser.add_argument("--max-iterations", type=int, default=None, help="Optimization rounds")
+    parser.add_argument("--candidates-per-round", type=int, default=None)
+    parser.add_argument(
+        "--optimization-history",
+        choices=["full", "last"],
+        default=None,
+        help="'full' shows the whole archive to the agent; 'last' only the latest candidate (ablation)",
+    )
     parser.add_argument(
         "--parsed-intent-file",
         default=None,
@@ -74,6 +81,8 @@ def main() -> None:
         model_id=settings.groq_model,
         runtime_mode=runtime_mode,
         max_iterations=args.max_iterations or settings.max_optimization_iterations,
+        candidates_per_round=args.candidates_per_round or settings.optimization_candidates_per_round,
+        optimization_history=args.optimization_history or settings.optimization_history,
     )
     result = workflow.run(
         intent_text=args.intent,

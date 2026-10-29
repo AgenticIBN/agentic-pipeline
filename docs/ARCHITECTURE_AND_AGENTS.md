@@ -198,17 +198,16 @@ These commands become hard TX-state constraints. Candidate generation and confli
 
 **File:** `agentic_ibn/agents/optimization_agent.py`  
 **Factory:** `create_optimization_agent()`  
-**Output schema:** `CandidateProposal`
+**Output schema:** `CandidateBatch` (several `RoleProposal` candidates per round)
 
-The Optimization Agent proposes a complete absolute `NetworkConfig` rather than an informal list of changes. Its input contains:
+The Optimization Agent proposes complete absolute `NetworkConfig` candidates rather than an informal list of changes. Each round its input contains:
 
-- the parsed intent;
-- the baseline or current configuration;
-- the current surrogate prediction;
-- objective-gap information;
-- hard TX-state constraints;
-- parameter ranges supported by the surrogate artifact;
-- feedback from earlier candidate evaluations.
+- the parsed intent and hard TX-state constraints;
+- the fixed environment (user count, user set, coverage threshold), which candidates may not change;
+- the allowed values of each knob (the surrogate's training grid, or its range for older artifacts);
+- the start configuration (best candidate so far, otherwise the baseline);
+- the optimization archive: every candidate tried so far, sorted from worst to best score, with what changed relative to an earlier entry and how each KPI and the score moved;
+- the roles requested for this round.
 
 The agent proposes network actions but does not invent KPI evidence. KPI values are produced only by the surrogate model.
 
@@ -227,30 +226,46 @@ Using absolute configurations avoids ambiguity about whether a value is a delta 
 
 ### 6.2 Optimization loop
 
-`OptimizationLoop` is the deterministic executor surrounding the Agno Optimization Agent:
+`OptimizationLoop` is the deterministic executor surrounding the Agno Optimization Agent. Its memory is the `OptimizationArchive` (`agentic_ibn/optimization/archive.py`), in the spirit of OPRO (Yang et al., "Large Language Models as Optimizers"):
 
 ```text
-1. Ask the Optimization Agent for a candidate.
-2. Apply hard transmitter-state constraints.
-3. validate parameter bounds and reject invalid configurations.
-4. Run surrogate prediction.
-5. Score the prediction against the parsed intent.
-6. Return objective gaps and validation feedback to the agent.
-7. Retain the best evaluated candidate.
-8. Stop when targets are satisfied or the iteration limit is reached.
+1. Score the baseline and store it as archive entry 0.
+2. Each round, ask the Optimization Agent for a batch of candidates:
+   round 1: "explore" candidates that differ clearly from each other;
+   later rounds: "learn" (change 1-2 knobs of the best entry), "combine" (apply the
+   changes that helped together) and "free" (the most promising move).
+3. Validate each candidate: hard TX states, snap knobs onto the training grid,
+   pin the environment fields, reject all-OFF configurations.
+4. Skip configurations already in the archive.
+5. Store rejected candidates in the archive with the reason; the run continues.
+6. Predict with the surrogate, score against the intent, and store the entry with
+   its parameter changes, KPI deltas and score delta versus the best entry so far.
+7. Stop when every numeric target is met, when a round brings no improvement, or
+   after the round limit. The best archive entry is the result.
 ```
 
-The default maximum number of candidate evaluations is controlled by:
+Settings (environment variable / `run_workflow.py` flag):
 
 ```text
-MAX_OPTIMIZATION_ITERATIONS=3
+MAX_OPTIMIZATION_ITERATIONS=3          --max-iterations          rounds
+OPTIMIZATION_CANDIDATES_PER_ROUND=4    --candidates-per-round
+OPTIMIZATION_HISTORY=full              --optimization-history    full | last (ablation)
 ```
+
+`OPTIMIZATION_HISTORY=last` with one candidate per round shows the agent only the latest candidate, which is close to the original single-candidate loop and is kept for comparisons.
+
+### 6.2.1 Benchmark against the exhaustive optimum
+
+`scripts/benchmark_optimizer.py` enumerates every configuration on the surrogate's training grid that respects the hard constraints, scores all of them with the same objective, and compares each optimizer variant with that optimum (gap to optimum, target hit rate, candidates evaluated, agent calls, time). Test cases live in a JSON file such as `examples/benchmark_cases.json`.
+
+The script needs the artifact's `parameter_grid`. Artifacts trained before it existed can be updated with `scripts/attach_parameter_grid.py`.
 
 ### 6.3 Validation rules
 
 The candidate validator enforces:
 
-- model-supported parameter ranges;
+- model-supported parameter ranges, snapped to the nearest training-grid value when the artifact stores `parameter_grid`;
+- fixed environment fields (user count, user set, coverage threshold) equal to the baseline;
 - valid transmitter states;
 - hard ON/OFF commands;
 - valid numeric values;

@@ -64,6 +64,8 @@ class AgenticWorkflow:
         model_id: str | None = None,
         runtime_mode: str = "agno",
         max_iterations: int = 3,
+        candidates_per_round: int = 4,
+        optimization_history: str = "full",
         candidate_generator: CandidateGenerator | None = None,
         resolution_coordinator: ConflictResolutionCoordinator | None = None,
         reasoning_narrator: ReasoningNarrator | None = None,
@@ -88,6 +90,8 @@ class AgenticWorkflow:
             surrogate=surrogate,
             candidate_generator=candidate_generator,
             max_iterations=max_iterations,
+            candidates_per_round=candidates_per_round,
+            history=optimization_history,
         )
         self.resolution_coordinator = resolution_coordinator or ConflictResolutionCoordinator(
             model_id=model_id,

@@ -58,7 +58,8 @@ class ReasoningNarrator:
         )
         return StrategicNarrative(
             summary=(
-                f"The Optimization Agent evaluated {len(optimization.iterations)} candidate configuration(s); "
+                f"The Optimization Agent evaluated {len(optimization.iterations)} candidate configuration(s) "
+                f"over {optimization.rounds_run} round(s); "
                 f"the requested numeric target was {target_status}. The final strategy was {resolution.strategy.value}."
             ),
             optimization_explanation=(

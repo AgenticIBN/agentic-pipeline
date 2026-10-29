@@ -235,8 +235,53 @@ class ObjectiveEvaluation(StrictModel):
     checks: list[ObjectiveCheck]
 
 
+CandidateRole = Literal["explore", "learn", "combine", "free"]
+
+
+class RoleProposal(StrictModel):
+    """One candidate inside a batch, tagged with the job it does in the round."""
+
+    role: CandidateRole
+    configuration: NetworkConfig
+    rationale: str
+    expected_tradeoffs: list[str] = Field(default_factory=list)
+
+
+class CandidateBatch(StrictModel):
+    """Structured output of the Optimization Agent: several candidates per round."""
+
+    candidates: list[RoleProposal]
+
+
+class ParameterChange(StrictModel):
+    tx: int = Field(ge=0, le=3)
+    parameter: Literal["on", "power_dbm", "azimuth_delta_deg", "elevation_delta_deg"]
+    before: float | bool
+    after: float | bool
+
+
+class ArchiveEntry(StrictModel):
+    """One evaluated (or rejected) configuration in the optimization archive."""
+
+    entry_id: int
+    round: int
+    role: Literal["baseline", "explore", "learn", "combine", "free"]
+    status: Literal["baseline", "evaluated", "rejected"]
+    configuration: NetworkConfig
+    prediction: KPIPrediction | None = None
+    evaluation: ObjectiveEvaluation | None = None
+    reference_entry_id: int | None = None
+    changes: list[ParameterChange] = Field(default_factory=list)
+    kpi_deltas: dict[str, float] = Field(default_factory=dict)
+    score_delta: float | None = None
+    rationale: str = ""
+    errors: list[str] = Field(default_factory=list)
+
+
 class OptimizationIteration(StrictModel):
     iteration: int
+    round: int = 0
+    role: CandidateRole | None = None
     proposal: CandidateProposal
     validation: ValidationResult
     prediction: KPIPrediction
@@ -256,6 +301,9 @@ class OptimizationResult(StrictModel):
     iterations: list[OptimizationIteration]
     hard_constraints: HardConstraints
     model_scenario: str
+    archive: list[ArchiveEntry] = Field(default_factory=list)
+    rounds_run: int = 0
+    generator_calls: int = 0
 
 
 class ConflictType(str, Enum):

@@ -19,6 +19,8 @@ class Settings:
     state_file: Path
     model_registry_file: Path
     max_optimization_iterations: int
+    optimization_candidates_per_round: int
+    optimization_history: str
     default_scenario: str
 
     @classmethod
@@ -34,6 +36,8 @@ class Settings:
             state_file=Path(os.getenv("ACTIVE_STATE_FILE", "state/active_intents.json")),
             model_registry_file=Path(os.getenv("MODEL_REGISTRY_FILE", "config/model_registry.json")),
             max_optimization_iterations=int(os.getenv("MAX_OPTIMIZATION_ITERATIONS", "3")),
+            optimization_candidates_per_round=int(os.getenv("OPTIMIZATION_CANDIDATES_PER_ROUND", "4")),
+            optimization_history=os.getenv("OPTIMIZATION_HISTORY", "full").strip().lower(),
             default_scenario=os.getenv("DEFAULT_SCENARIO", "urban_area"),
         )
 

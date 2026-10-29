@@ -1,0 +1,56 @@
+[
+  {
+    "name": "maintenance_tx2_coverage_sinr",
+    "intent": {
+      "raw_text": "TX2 is under maintenance tonight. Keep coverage at least 90% and SINR p5 at least 0 dB.",
+      "target_area": "downtown",
+      "scenario": "urban_area",
+      "target_kpis": ["COVERAGE", "SINR"],
+      "kpi_thresholds": [
+        {"kpi": "COVERAGE", "operator": "GTE", "value": 0.9},
+        {"kpi": "SINR", "operator": "GTE", "value": 0.0, "unit": "dB"}
+      ],
+      "priority": "HIGH",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "rx_power_floor",
+    "intent": {
+      "raw_text": "Increase RX power in the park to at least -95 dBm.",
+      "target_area": "park",
+      "scenario": "urban_area",
+      "target_kpis": ["RX_POWER"],
+      "kpi_thresholds": [{"kpi": "RX_POWER", "operator": "GTE", "value": -95.0, "unit": "dBm"}],
+      "priority": "MEDIUM",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "energy_saving_keep_coverage",
+    "intent": {
+      "raw_text": "Reduce total transmit power to at most 60 W while keeping coverage at least 85%.",
+      "target_area": "campus",
+      "scenario": "urban_area",
+      "target_kpis": ["TOTAL_TX_POWER", "COVERAGE"],
+      "kpi_thresholds": [
+        {"kpi": "TOTAL_TX_POWER", "operator": "LTE", "value": 60.0, "unit": "W"},
+        {"kpi": "COVERAGE", "operator": "GTE", "value": 0.85}
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.9
+    }
+  },
+  {
+    "name": "load_balance_up",
+    "intent": {
+      "raw_text": "Balance the load across base stations in the stadium area.",
+      "target_area": "stadium",
+      "scenario": "urban_area",
+      "target_kpis": ["LOAD_BALANCE"],
+      "kpi_thresholds": [{"kpi": "LOAD_BALANCE", "operator": "GTE", "value": 0.9}],
+      "priority": "LOW",
+      "confidence": 0.85
+    }
+  }
+]
