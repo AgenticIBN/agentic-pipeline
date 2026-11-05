@@ -137,7 +137,7 @@ def test_invalid_candidate_is_archived_not_fatal(surrogate, baseline, maintenanc
     assert "All transmitters are OFF" in result.archive[1].errors[0]
 
 
-def test_stops_after_a_round_without_improvement(surrogate, baseline, maintenance_intent):
+def test_stops_after_consecutive_rounds_without_improvement(surrogate, baseline, maintenance_intent):
     first = _with(baseline, 0, power_dbm=46.0)
 
     class RepeatingGenerator:
@@ -146,7 +146,26 @@ def test_stops_after_a_round_without_improvement(surrogate, baseline, maintenanc
 
     loop = OptimizationLoop(surrogate, RepeatingGenerator(), max_iterations=5, candidates_per_round=1)
     result = loop.optimize(maintenance_intent, baseline)
-    assert result.rounds_run == 2 and len(result.iterations) == 1
+    assert result.rounds_run == 3 and len(result.iterations) == 1
+
+    impatient = OptimizationLoop(surrogate, RepeatingGenerator(), max_iterations=5, candidates_per_round=1, stall_patience=1)
+    assert impatient.optimize(maintenance_intent, baseline).rounds_run == 2
+
+
+def test_missing_rationale_is_filled_not_fatal(surrogate, baseline, maintenance_intent):
+    batch = CandidateBatch.model_validate(
+        {"candidates": [{"role": "explore", "configuration": _with(baseline, 0, power_dbm=46.0).model_dump()}]}
+    )
+
+    class NoRationaleGenerator:
+        def propose_batch(self, request):
+            return batch.candidates
+
+    loop = OptimizationLoop(surrogate, NoRationaleGenerator(), max_iterations=1, candidates_per_round=1)
+    result = loop.optimize(maintenance_intent, baseline)
+    rationale = result.archive[1].rationale
+    assert rationale.startswith("Auto-filled") and "TX0 power" in rationale
+    assert result.iterations[0].proposal.rationale == rationale
 
 
 def test_agno_generator_sends_archive_and_roles(surrogate, baseline, maintenance_intent):

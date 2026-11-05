@@ -243,7 +243,9 @@ class RoleProposal(StrictModel):
 
     role: CandidateRole
     configuration: NetworkConfig
-    rationale: str
+    # Optional so one candidate without a rationale does not invalidate the whole batch;
+    # the optimization loop fills a missing rationale from the parameter changes.
+    rationale: str = ""
     expected_tradeoffs: list[str] = Field(default_factory=list)
 
 

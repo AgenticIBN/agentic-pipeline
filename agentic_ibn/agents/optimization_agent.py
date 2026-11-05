@@ -8,7 +8,11 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from ..constraints import extract_hard_constraints
-from ..optimization.archive import OptimizationArchive
+from ..optimization.archive import (
+    OptimizationArchive,
+    configuration_changes,
+    describe_change,
+)
 from ..optimization.objective import ObjectiveEvaluator
 from ..optimization.validator import CandidateValidator
 from ..schemas import (
@@ -41,7 +45,7 @@ OPTIMIZATION_INSTRUCTIONS = [
     "Use only the allowed values when a list is given; otherwise stay within the given range.",
     "When a transmitter is disabled for maintenance, compensate only with transmitters that are allowed to remain active.",
     "Among equally promising candidates prefer smaller changes and lower total transmit power.",
-    "Give each candidate a concise engineering rationale and its expected trade-offs.",
+    "Always give each candidate a non-empty, concise engineering rationale and its expected trade-offs.",
     "Return only schema-compliant structured data.",
 ]
 
@@ -289,12 +293,23 @@ class HeuristicCandidateGenerator:
         return proposals
 
 
+def fill_rationale(rationale: str, configuration: NetworkConfig, archive: OptimizationArchive) -> str:
+    """Keep the agent's rationale; when it is missing, describe the candidate from its parameter changes."""
+    if rationale.strip():
+        return rationale
+    reference = archive.reference()
+    changes = [describe_change(change) for change in configuration_changes(configuration, reference.configuration)]
+    summary = ", ".join(changes) if changes else "no parameter change"
+    return f"Auto-filled (agent gave no rationale): changes vs entry {reference.entry_id}: {summary}."
+
+
 class OptimizationLoop:
     """Deterministic evaluation loop around the Agno Optimization Agent.
 
     Each round the generator proposes a batch of candidates; every candidate is validated, scored by
     the surrogate and stored in the archive, which the next round sees in full. The loop stops when
-    every numeric target is met, when a round brings no improvement, or after max_iterations rounds.
+    every numeric target is met, after stall_patience consecutive rounds without improvement, or after
+    max_iterations rounds.
     """
 
     def __init__(
@@ -305,9 +320,12 @@ class OptimizationLoop:
         candidates_per_round: int = 4,
         history: str = "full",
         stop_on_stall: bool = True,
+        stall_patience: int = 2,
     ):
         if max_iterations < 1:
             raise ValueError("max_iterations must be at least 1")
+        if stall_patience < 1:
+            raise ValueError("stall_patience must be at least 1")
         if candidates_per_round < 1:
             raise ValueError("candidates_per_round must be at least 1")
         if history not in {"full", "last"}:
@@ -318,6 +336,7 @@ class OptimizationLoop:
         self.candidates_per_round = candidates_per_round
         self.history = history
         self.stop_on_stall = stop_on_stall
+        self.stall_patience = stall_patience
         self.validator = CandidateValidator(surrogate)
         self.evaluator = ObjectiveEvaluator()
 
@@ -333,6 +352,7 @@ class OptimizationLoop:
         iterations: list[OptimizationIteration] = []
         generator_calls = 0
         rounds_run = 0
+        stalled_rounds = 0
 
         for round_index in range(self.max_iterations):
             roles = round_roles(round_index, self.candidates_per_round)
@@ -358,6 +378,9 @@ class OptimizationLoop:
                 configuration = validation.configuration
                 if archive.contains(configuration):
                     continue
+                proposal = proposal.model_copy(
+                    update={"rationale": fill_rationale(proposal.rationale, configuration, archive)}
+                )
                 if not validation.valid:
                     archive.add_rejected(
                         round_index=round_index,
@@ -397,12 +420,9 @@ class OptimizationLoop:
             if best is not None and best.evaluation.all_numeric_targets_met:  # type: ignore[union-attr]
                 break
             best_after = archive.best_score()
-            if (
-                self.stop_on_stall
-                and best_before is not None
-                and best_after is not None
-                and best_after <= best_before + 1e-9
-            ):
+            improved = best_before is None or (best_after is not None and best_after > best_before + 1e-9)
+            stalled_rounds = 0 if improved else stalled_rounds + 1
+            if self.stop_on_stall and stalled_rounds >= self.stall_patience:
                 break
 
         best = archive.best()

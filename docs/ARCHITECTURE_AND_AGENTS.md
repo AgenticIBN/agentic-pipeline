@@ -238,10 +238,13 @@ Using absolute configurations avoids ambiguity about whether a value is a delta 
    pin the environment fields, reject all-OFF configurations.
 4. Skip configurations already in the archive.
 5. Store rejected candidates in the archive with the reason; the run continues.
+   A candidate without a rationale is kept; the loop writes one from its parameter
+   changes ("Auto-filled ...") so no archive entry has an empty rationale.
 6. Predict with the surrogate, score against the intent, and store the entry with
    its parameter changes, KPI deltas and score delta versus the best entry so far.
-7. Stop when every numeric target is met, when a round brings no improvement, or
-   after the round limit. The best archive entry is the result.
+7. Stop when every numeric target is met, after two consecutive rounds without
+   improvement (`stall_patience`), or after the round limit. The best archive entry
+   is the result.
 ```
 
 Settings (environment variable / `run_workflow.py` flag):
