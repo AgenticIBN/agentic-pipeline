@@ -6,9 +6,10 @@ from typing import Any
 
 import joblib
 import numpy as np
+import pandas as pd
 
 from ..schemas import KPIPrediction, NetworkConfig
-from .features import configuration_to_feature_frame
+from .features import configuration_to_feature_frame, engineer_features
 
 
 TARGET_ALIASES = {
@@ -40,6 +41,11 @@ class SurrogateModel:
         self.parameter_bounds: dict[str, dict[str, float]] = dict(
             artifact.get("parameter_bounds") or artifact.get("param_ranges") or {}
         )
+        self.parameter_grid: dict[str, list[float]] = {
+            str(name): sorted(float(value) for value in values)
+            for name, values in dict(artifact.get("parameter_grid") or {}).items()
+            if values
+        }
         self.metrics: dict[str, Any] = dict(artifact.get("metrics") or {})
         self.bandwidth_hz = float(artifact.get("bandwidth_hz", artifact.get("bw_hz", 400_000_000.0)))
         if not self.feature_names:
@@ -73,11 +79,7 @@ class SurrogateModel:
             return 0.0
         return float(array.sum() ** 2 / denominator)
 
-    def predict(self, configuration: NetworkConfig) -> KPIPrediction:
-        frame = configuration_to_feature_frame(configuration, self.feature_names)
-        matrix = frame.to_numpy(dtype=np.float32)
-        raw = {target: self._predict_model(model, matrix) for target, model in self.models.items()}
-
+    def _assemble_prediction(self, raw: dict[str, float], total_tx_power_watt: float) -> KPIPrediction:
         kwargs: dict[str, Any] = {"raw_targets": raw}
         for target, schema_field in TARGET_ALIASES.items():
             if target in raw:
@@ -98,8 +100,43 @@ class SurrogateModel:
                 sinr_linear = 10 ** (float(sinr) / 10.0)
                 kwargs["throughput_p5_mbps"] = self.bandwidth_hz * math.log2(1.0 + sinr_linear) / 1e6
 
-        kwargs["total_tx_power_watt"] = float(configuration.to_flat_dict()["total_tx_power_watt"])
+        kwargs["total_tx_power_watt"] = float(total_tx_power_watt)
         return KPIPrediction(**kwargs)
+
+    def predict(self, configuration: NetworkConfig) -> KPIPrediction:
+        frame = configuration_to_feature_frame(configuration, self.feature_names)
+        matrix = frame.to_numpy(dtype=np.float32)
+        raw = {target: self._predict_model(model, matrix) for target, model in self.models.items()}
+        return self._assemble_prediction(raw, float(configuration.to_flat_dict()["total_tx_power_watt"]))
+
+    def predict_flat_frame(self, flat: pd.DataFrame) -> list[KPIPrediction]:
+        """Batch prediction for many configurations given as flat rows (NetworkConfig.to_flat_dict columns).
+
+        Same numbers as calling predict() row by row, but every model runs once over the whole matrix.
+        Used by the exhaustive-search benchmark.
+        """
+        engineered = engineer_features(flat)
+        missing = [name for name in self.feature_names if name not in engineered.columns]
+        if missing:
+            raise ValueError(f"Artifact requests unsupported features: {missing}")
+        matrix = engineered[self.feature_names].to_numpy(dtype=np.float32)
+        outputs = {target: np.asarray(model.predict(matrix), dtype=float).reshape(-1) for target, model in self.models.items()}
+        for target, values in outputs.items():
+            if not np.all(np.isfinite(values)):
+                raise SurrogateArtifactError(f"Surrogate model produced non-finite predictions for {target}")
+        totals = engineered["total_tx_power_watt"].to_numpy(dtype=float)
+        targets = list(outputs)
+        return [
+            self._assemble_prediction({target: float(outputs[target][row]) for target in targets}, totals[row])
+            for row in range(len(matrix))
+        ]
+
+    def grid_for(self, parameter: str) -> list[float] | None:
+        """Distinct training values of a knob (power, azimuth or tilt), or None for artifacts without a grid."""
+        values = self.parameter_grid.get(parameter) or self.parameter_grid.get(
+            {"power_dbm": "power", "azimuth_delta_deg": "dAz", "elevation_delta_deg": "dEl"}.get(parameter, parameter)
+        )
+        return list(values) if values else None
 
     def bounds_for(self, parameter: str, default_min: float, default_max: float) -> tuple[float, float]:
         bound = self.parameter_bounds.get(parameter) or self.parameter_bounds.get(
