@@ -38,9 +38,20 @@ from agentic_ibn.agents.optimization_agent import (
     OptimizationLoop,
 )
 from agentic_ibn.constraints import extract_hard_constraints
+from agentic_ibn.optimization.archive import configuration_changes, describe_change
 from agentic_ibn.optimization.objective import ObjectiveEvaluator
 from agentic_ibn.schemas import NetworkConfig, ParsedIntent
 from agentic_ibn.surrogate.model import SurrogateModel
+
+# KPIs reported for the baseline and for each run's best configuration.
+REPORTED_KPIS = (
+    "coverage_ratio",
+    "sinr_p5_db",
+    "rx_power_p5_dbm",
+    "throughput_p5_mbps",
+    "load_balance",
+    "total_tx_power_watt",
+)
 
 DEFAULT_VARIANTS = ["V0-last-1,3,1,last,nostall", "V1-full-1,3,1,full", "V2-full-4,3,4,full"]
 
@@ -145,11 +156,20 @@ def run_variant(
         history=variant["history"],
         stop_on_stall=variant["stop_on_stall"],
     )
+    call_log = getattr(generator, "call_log", None)
+    if call_log is not None:
+        call_log.clear()
     started = time.perf_counter()
     try:
         result = loop.optimize(intent, baseline)
     except Exception as exc:  # noqa: BLE001 - a failed run is a data point, not a crash of the benchmark
-        return {"error": f"{type(exc).__name__}: {exc}", "seconds": round(time.perf_counter() - started, 2)}
+        return {
+            "error": f"{type(exc).__name__}: {exc}",
+            "seconds": round(time.perf_counter() - started, 2),
+            **llm_timing(call_log),
+        }
+    seconds = round(time.perf_counter() - started, 2)
+    timing = llm_timing(call_log)
     return {
         "score": result.best_score,
         "target_satisfied": result.target_satisfied,
@@ -158,7 +178,51 @@ def run_variant(
         "generator_calls": result.generator_calls,
         "rounds_run": result.rounds_run,
         "configuration": result.final_configuration.model_dump(mode="json"),
-        "seconds": round(time.perf_counter() - started, 2),
+        "changes_vs_baseline": [
+            describe_change(change)
+            for change in configuration_changes(result.final_configuration, result.baseline_configuration)
+        ],
+        "baseline_kpis": kpi_subset(result.baseline_prediction),
+        "best_kpis": kpi_subset(result.predicted_kpis),
+        "best_rationale": best_rationale(result),
+        "seconds": seconds,
+        **timing,
+        "other_seconds": round(seconds - timing["llm_seconds"], 2) if "llm_seconds" in timing else None,
+    }
+
+
+def kpi_subset(prediction: Any) -> dict[str, float | None]:
+    return {name: getattr(prediction, name, None) for name in REPORTED_KPIS}
+
+
+def best_rationale(result: Any) -> str | None:
+    """Rationale the agent gave for the configuration that won (None when the baseline won)."""
+    for entry in result.archive:
+        if (
+            entry.status == "evaluated"
+            and entry.evaluation is not None
+            and entry.evaluation.score == result.best_score
+            and entry.configuration == result.final_configuration
+        ):
+            return entry.rationale
+    return None
+
+
+def llm_timing(call_log: list[dict[str, Any]] | None) -> dict[str, Any]:
+    """Totals over the LLM calls of one run; empty for the offline generator."""
+    if not call_log:
+        return {}
+
+    def total(key: str) -> int | None:
+        values = [call.get(key) for call in call_log if call.get(key) is not None]
+        return int(sum(values)) if values else None
+
+    return {
+        "llm_calls": [dict(call) for call in call_log],
+        "llm_seconds": round(sum(call["seconds"] for call in call_log), 2),
+        "input_tokens": total("input_tokens"),
+        "output_tokens": total("output_tokens"),
+        "reasoning_tokens": total("reasoning_tokens"),
     }
 
 
@@ -179,9 +243,43 @@ def summarize(cases: list[dict[str, Any]], variant_names: list[str]) -> list[dic
                 "mean_candidates_evaluated": round(mean(run["candidates_evaluated"] for run in ok), 2) if ok else None,
                 "mean_generator_calls": round(mean(run["generator_calls"] for run in ok), 2) if ok else None,
                 "mean_seconds": round(mean(run["seconds"] for run in ok), 2) if ok else None,
+                "mean_llm_seconds": mean_of(ok, "llm_seconds"),
+                "mean_best_coverage": mean_of([run.get("best_kpis", {}) for run in ok], "coverage_ratio", 4),
             }
         )
     return rows
+
+
+def mean_of(rows: list[dict[str, Any]], key: str, digits: int = 2) -> float | None:
+    values = [row[key] for row in rows if row.get(key) is not None]
+    return round(mean(values), digits) if values else None
+
+
+def fmt(value: Any, digits: int = 3) -> str:
+    return "-" if value is None else f"{value:.{digits}f}"
+
+
+def print_case_table(case: dict[str, Any]) -> None:
+    """Readable per-case view: score, gap, coverage before and after, time and what changed."""
+    print(f"\n{case['name']}")
+    if "exhaustive" in case:
+        print(f"  true best score {fmt(case['exhaustive']['score'], 4)}")
+    for name, runs in case["variants"].items():
+        for number, run in enumerate(runs, start=1):
+            label = name if len(runs) == 1 else f"{name} #{number}"
+            if "error" in run:
+                print(f"  {label}: ERROR {run['error'][:120]} ({run['seconds']} s)")
+                continue
+            base, best = run["baseline_kpis"], run["best_kpis"]
+            print(
+                f"  {label}: score {fmt(run['score'], 4)}, gap {fmt(run.get('gap_to_optimum'), 4)}, "
+                f"coverage {fmt(base['coverage_ratio'])} -> {fmt(best['coverage_ratio'])}, "
+                f"SINR p5 {fmt(base['sinr_p5_db'], 1)} -> {fmt(best['sinr_p5_db'], 1)} dB, "
+                f"time {run['seconds']} s (LLM {run.get('llm_seconds', '-')} s, {len(run.get('llm_calls', []))} calls)"
+            )
+            print(f"      changes: {', '.join(run['changes_vs_baseline']) or 'none'}")
+            if run.get("best_rationale"):
+                print(f"      why (agent): {run['best_rationale'][:240]}")
 
 
 def main() -> None:
@@ -191,10 +289,27 @@ def main() -> None:
     parser.add_argument("--runtime", choices=["deterministic", "agno"], default="deterministic")
     parser.add_argument("--model-id", default=None, help="Groq model id for --runtime agno (default: GROQ_MODEL)")
     parser.add_argument("--variant", action="append", type=parse_variant, default=None)
+    parser.add_argument(
+        "--prompt-token-budget",
+        type=int,
+        default=None,
+        help="Cap on estimated prompt tokens for --runtime agno (default: OPTIMIZATION_PROMPT_TOKEN_BUDGET)",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=["low", "medium", "high"],
+        default=None,
+        help="Groq reasoning effort for gpt-oss models (default: provider default)",
+    )
     parser.add_argument("--repeats", type=int, default=1, help="Runs per variant and case (LLM runs vary)")
     parser.add_argument("--skip-exhaustive", action="store_true")
     parser.add_argument("--chunk-size", type=int, default=200_000)
     parser.add_argument("--out", default=None, help="Output JSON (default: results/benchmark_<timestamp>.json)")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Keep the finished cases already in --out and run only the missing ones",
+    )
     args = parser.parse_args()
 
     surrogate = SurrogateModel.load(args.model_path)
@@ -202,13 +317,48 @@ def main() -> None:
     if args.runtime == "agno":
         from agentic_ibn.config import Settings
 
-        generator: Any = AgnoCandidateGenerator(args.model_id or Settings.from_env().groq_model)
+        settings = Settings.from_env()
+        generator: Any = AgnoCandidateGenerator(
+            args.model_id or settings.groq_model,
+            prompt_token_budget=args.prompt_token_budget or settings.optimization_prompt_token_budget,
+            reasoning_effort=args.reasoning_effort,
+        )
     else:
         generator = HeuristicCandidateGenerator()
 
-    raw_cases = json.loads(Path(args.cases).read_text(encoding="utf-8"))
+    out_path = Path(args.out or f"results/benchmark_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    variant_names = [variant["name"] for variant in variants]
+
+    def save(cases: list[dict[str, Any]], complete: bool) -> None:
+        """Written after every case, so a crash or an exhausted API quota keeps the finished cases."""
+        output = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "complete": complete,
+            "model_path": str(Path(args.model_path).resolve()),
+            "scenario": surrogate.scenario,
+            "runtime": args.runtime,
+            "llm_model": getattr(generator, "model_id", None),
+            "reasoning_effort": getattr(generator, "reasoning_effort", None),
+            "prompt_token_budget": getattr(generator, "prompt_token_budget", None),
+            "variants": variants,
+            "summary": summarize(cases, variant_names),
+            "cases": cases,
+        }
+        out_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
+
     cases: list[dict[str, Any]] = []
+    if args.resume and out_path.exists():
+        previous = json.loads(out_path.read_text(encoding="utf-8")).get("cases", [])
+        cases = [case for case in previous if case_finished(case, variant_names)]
+        print(f"Resuming: {len(cases)} finished case(s) kept from {out_path}", flush=True)
+    done = {case["name"] for case in cases}
+
+    stopped_reason = None
+    raw_cases = json.loads(Path(args.cases).read_text(encoding="utf-8"))
     for raw in raw_cases:
+        if raw["name"] in done:
+            continue
         intent = ParsedIntent.model_validate(raw["intent"])
         baseline = NetworkConfig.model_validate(raw.get("baseline") or {})
         print(f"Case {raw['name']}", flush=True)
@@ -223,26 +373,48 @@ def main() -> None:
                 if "score" in run and "exhaustive" in case:
                     run["gap_to_optimum"] = case["exhaustive"]["score"] - run["score"]
                 runs.append(run)
+                if is_quota_error(run.get("error")):
+                    stopped_reason = run["error"]
+                    break
             case["variants"][variant["name"]] = runs
             shown = runs[0].get("score", runs[0].get("error"))
             print(f"    {variant['name']}: {shown}", flush=True)
+            if stopped_reason:
+                break
+        if stopped_reason:
+            # The interrupted case is not kept, so --resume runs it again from the start.
+            break
         cases.append(case)
+        save(cases, complete=False)
 
-    summary = summarize(cases, [variant["name"] for variant in variants])
-    output = {
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "model_path": str(Path(args.model_path).resolve()),
-        "scenario": surrogate.scenario,
-        "runtime": args.runtime,
-        "variants": variants,
-        "summary": summary,
-        "cases": cases,
-    }
-    out_path = Path(args.out or f"results/benchmark_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}.json")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
-    print("\n" + pd.DataFrame(summary).to_string(index=False))
+    save(cases, complete=stopped_reason is None)
+    for case in cases:
+        print_case_table(case)
+    print("\n" + pd.DataFrame(summarize(cases, variant_names)).to_string(index=False))
     print(f"\nSaved benchmark to: {out_path}")
+    if stopped_reason:
+        print(
+            "\nStopped early: the LLM API rate limit or quota was hit. Finished cases are saved; run the same command "
+            f"again with --resume once the quota resets.\n{stopped_reason[:300]}"
+        )
+
+
+def case_finished(case: dict[str, Any], variant_names: list[str]) -> bool:
+    runs = case.get("variants", {})
+    return all(name in runs and runs[name] and not any("error" in run for run in runs[name]) for name in variant_names)
+
+
+def is_quota_error(error: str | None) -> bool:
+    """Groq answers 429 with "tokens per day (TPD)" or "requests per day (RPD)" once the daily quota is gone.
+
+    agno can hand the 429 body back as the response content, so the run then fails as a CandidateBatch
+    ValidationError whose (truncated) text still contains "rate_limit_exceeded".
+    """
+    if not error:
+        return False
+    text = error.lower()
+    markers = ("per day", "(tpd)", "(rpd)", "insufficient_quota", "rate_limit_exceeded")
+    return any(marker in text for marker in markers)
 
 
 if __name__ == "__main__":

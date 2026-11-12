@@ -8,7 +8,7 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 
-def build_groq_agent(*, model_id: str, **agent_kwargs: Any) -> Any:
+def build_groq_agent(*, model_id: str, reasoning_effort: str | None = None, **agent_kwargs: Any) -> Any:
     """Create an Agno Agent lazily so deterministic tests do not require Agno."""
     try:
         from agno.agent import Agent
@@ -17,7 +17,9 @@ def build_groq_agent(*, model_id: str, **agent_kwargs: Any) -> Any:
         raise RuntimeError(
             "Agno/Groq dependencies are not installed. Run `pip install -r requirements.txt`."
         ) from exc
-    return Agent(model=Groq(id=model_id), **agent_kwargs)
+    # reasoning_effort (low / medium / high) is a Groq option for reasoning models such as gpt-oss.
+    request_params = {"reasoning_effort": reasoning_effort} if reasoning_effort else None
+    return Agent(model=Groq(id=model_id, request_params=request_params), **agent_kwargs)
 
 
 def coerce_response_model(response: Any, schema: type[T]) -> T:

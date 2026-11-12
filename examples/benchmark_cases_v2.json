@@ -1,0 +1,247 @@
+[
+  {
+    "name": "medium_coverage_91",
+    "difficulty": "medium",
+    "intent": {
+      "raw_text": "Raise coverage to at least 91%.",
+      "target_area": "downtown",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.91
+        }
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "veryhard_coverage_94",
+    "difficulty": "veryhard",
+    "intent": {
+      "raw_text": "Raise coverage to at least 94%.",
+      "target_area": "downtown",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.94
+        }
+      ],
+      "priority": "HIGH",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "medium_energy100_cov87",
+    "difficulty": "medium",
+    "intent": {
+      "raw_text": "Keep total transmit power at most 100 W while coverage stays at least 87%.",
+      "target_area": "campus",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "TOTAL_TX_POWER",
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "TOTAL_TX_POWER",
+          "operator": "LTE",
+          "value": 100.0,
+          "unit": "W"
+        },
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.87
+        }
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "hard_energy100_cov89",
+    "difficulty": "hard",
+    "intent": {
+      "raw_text": "Keep total transmit power at most 100 W while coverage stays at least 89%.",
+      "target_area": "campus",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "TOTAL_TX_POWER",
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "TOTAL_TX_POWER",
+          "operator": "LTE",
+          "value": 100.0,
+          "unit": "W"
+        },
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.89
+        }
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "veryhard_energy80_cov88",
+    "difficulty": "veryhard",
+    "intent": {
+      "raw_text": "Keep total transmit power at most 80 W while coverage stays at least 88%.",
+      "target_area": "campus",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "TOTAL_TX_POWER",
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "TOTAL_TX_POWER",
+          "operator": "LTE",
+          "value": 80.0,
+          "unit": "W"
+        },
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.88
+        }
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "medium_tx0_maintenance_cov80",
+    "difficulty": "medium",
+    "intent": {
+      "raw_text": "TX0 is under maintenance tonight. Keep coverage at least 80%.",
+      "target_area": "downtown",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.8
+        }
+      ],
+      "priority": "HIGH",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "hard_tx2_maintenance_cov80",
+    "difficulty": "hard",
+    "intent": {
+      "raw_text": "TX2 is under maintenance tonight. Keep coverage at least 80%.",
+      "target_area": "downtown",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.8
+        }
+      ],
+      "priority": "HIGH",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "veryhard_tx3_maintenance_cov80",
+    "difficulty": "veryhard",
+    "intent": {
+      "raw_text": "TX3 is under maintenance tonight. Keep coverage at least 80%.",
+      "target_area": "downtown",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.8
+        }
+      ],
+      "priority": "HIGH",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "hard_loadbalance97_cov90",
+    "difficulty": "hard",
+    "intent": {
+      "raw_text": "Balance the load to at least 0.97 while keeping coverage at least 90%.",
+      "target_area": "stadium",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "LOAD_BALANCE",
+        "COVERAGE"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "LOAD_BALANCE",
+          "operator": "GTE",
+          "value": 0.97
+        },
+        {
+          "kpi": "COVERAGE",
+          "operator": "GTE",
+          "value": 0.9
+        }
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.95
+    }
+  },
+  {
+    "name": "veryhard_throughput440_energy100",
+    "difficulty": "veryhard",
+    "intent": {
+      "raw_text": "Reach a 5th percentile throughput of at least 440 Mbps with total transmit power at most 100 W.",
+      "target_area": "stadium",
+      "scenario": "urban_area",
+      "target_kpis": [
+        "THROUGHPUT_5P",
+        "TOTAL_TX_POWER"
+      ],
+      "kpi_thresholds": [
+        {
+          "kpi": "THROUGHPUT_5P",
+          "operator": "GTE",
+          "value": 440.0,
+          "unit": "Mbps"
+        },
+        {
+          "kpi": "TOTAL_TX_POWER",
+          "operator": "LTE",
+          "value": 100.0,
+          "unit": "W"
+        }
+      ],
+      "priority": "MEDIUM",
+      "confidence": 0.95
+    }
+  }
+]

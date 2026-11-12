@@ -66,6 +66,7 @@ class AgenticWorkflow:
         max_iterations: int = 3,
         candidates_per_round: int = 4,
         optimization_history: str = "full",
+        prompt_token_budget: int | None = None,
         candidate_generator: CandidateGenerator | None = None,
         resolution_coordinator: ConflictResolutionCoordinator | None = None,
         reasoning_narrator: ReasoningNarrator | None = None,
@@ -82,7 +83,7 @@ class AgenticWorkflow:
 
         if candidate_generator is None:
             candidate_generator = (
-                AgnoCandidateGenerator(model_id)
+                AgnoCandidateGenerator(model_id, prompt_token_budget=prompt_token_budget)
                 if runtime_mode == "agno" and model_id
                 else HeuristicCandidateGenerator()
             )

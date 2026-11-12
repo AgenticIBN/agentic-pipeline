@@ -253,7 +253,15 @@ Settings (environment variable / `run_workflow.py` flag):
 MAX_OPTIMIZATION_ITERATIONS=3          --max-iterations          rounds
 OPTIMIZATION_CANDIDATES_PER_ROUND=4    --candidates-per-round
 OPTIMIZATION_HISTORY=full              --optimization-history    full | last (ablation)
+OPTIMIZATION_PROMPT_TOKEN_BUDGET=      --prompt-token-budget     empty = no cap
 ```
+
+The JSON context is sent without indentation. With a prompt token budget (estimated as
+characters / 4, covering instructions, task and context but not the answer), whole archive rows
+are dropped until the prompt fits: rejected candidates first, then the worst scored ones; the
+best candidate is always kept and the context reports `rows_omitted_for_prompt_budget`. For the
+Groq free tier (8000 tokens per minute, answer included) a budget of about 6000 leaves room for
+the answer.
 
 `OPTIMIZATION_HISTORY=last` with one candidate per round shows the agent only the latest candidate, which is close to the original single-candidate loop and is kept for comparisons.
 

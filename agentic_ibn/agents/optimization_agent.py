@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -52,9 +53,10 @@ OPTIMIZATION_INSTRUCTIONS = [
 _TX_KNOBS = ("power_dbm", "azimuth_delta_deg", "elevation_delta_deg")
 
 
-def create_optimization_agent(model_id: str) -> Any:
+def create_optimization_agent(model_id: str, reasoning_effort: str | None = None) -> Any:
     return build_groq_agent(
         model_id=model_id,
+        reasoning_effort=reasoning_effort,
         name="Optimization Agent",
         role="Proposes batches of network configurations from the optimization archive.",
         description="Agentic proposal component inside the deterministic optimization loop.",
@@ -132,11 +134,56 @@ def _role_task(request: ProposalRequest) -> str:
     return "\n".join([header, *(text for role, text in role_help.items() if role in request.roles)])
 
 
-class AgnoCandidateGenerator:
-    """Calls the real Agno Optimization Agent for candidate generation."""
+def estimate_tokens(text: str) -> int:
+    """Rough token count (about four characters per token), used only for the prompt budget."""
+    return len(text) // 4
 
-    def __init__(self, model_id: str):
-        self.agent = create_optimization_agent(model_id)
+
+def _compact_json(value: Any) -> str:
+    return json.dumps(value, separators=(",", ":"))
+
+
+def fit_archive_view(archive_view: dict[str, Any], fixed_tokens: int, budget: int | None) -> dict[str, Any]:
+    """Drop whole archive rows until the prompt fits the token budget.
+
+    Rejected candidates go first, then the worst scored candidates; the best scored candidate is
+    always kept. Rows are never cut in the middle. Without a budget the view is returned unchanged.
+    """
+    if budget is None:
+        return archive_view
+    view = dict(archive_view)
+    tried = list(view["tried_candidates_worst_to_best"])
+    rejected = list(view["rejected_candidates"])
+    omitted = 0
+    while fixed_tokens + estimate_tokens(_compact_json(view)) > budget:
+        if rejected:
+            rejected.pop(0)
+        elif len(tried) > 1:
+            tried.pop(0)
+        else:
+            break
+        omitted += 1
+        view["tried_candidates_worst_to_best"] = tried
+        view["rejected_candidates"] = rejected
+        view["rows_omitted_for_prompt_budget"] = omitted
+    return view
+
+
+class AgnoCandidateGenerator:
+    """Calls the real Agno Optimization Agent for candidate generation.
+
+    prompt_token_budget caps the estimated size of what is sent (instructions, task and JSON
+    context, not the answer); None sends the whole archive view. reasoning_effort is passed to
+    Groq for reasoning models (None keeps the provider default). call_log keeps the wall time and
+    token counts of every LLM call so benchmarks can report where the time goes.
+    """
+
+    def __init__(self, model_id: str, prompt_token_budget: int | None = None, reasoning_effort: str | None = None):
+        self.model_id = model_id
+        self.reasoning_effort = reasoning_effort
+        self.agent = create_optimization_agent(model_id, reasoning_effort)
+        self.prompt_token_budget = prompt_token_budget
+        self.call_log: list[dict[str, Any]] = []
 
     def propose_batch(self, request: ProposalRequest) -> list[RoleProposal]:
         payload = {
@@ -153,10 +200,22 @@ class AgnoCandidateGenerator:
             },
             "requested_roles": request.roles,
             "start_configuration": request.start_configuration.model_dump(mode="json"),
-            "archive": request.archive_view,
         }
         task = _role_task(request)
-        response = self.agent.run(task + "\n\nJSON context:\n" + json.dumps(payload, indent=2))
+        fixed_tokens = estimate_tokens("\n".join(OPTIMIZATION_INSTRUCTIONS) + task + _compact_json(payload))
+        payload["archive"] = fit_archive_view(request.archive_view, fixed_tokens, self.prompt_token_budget)
+        started = time.perf_counter()
+        response = self.agent.run(task + "\n\nJSON context:\n" + _compact_json(payload))
+        metrics = getattr(response, "metrics", None)
+        self.call_log.append(
+            {
+                "seconds": round(time.perf_counter() - started, 2),
+                **{
+                    name: getattr(metrics, name, None)
+                    for name in ("input_tokens", "output_tokens", "reasoning_tokens", "total_tokens")
+                },
+            }
+        )
         return coerce_response_model(response, CandidateBatch).candidates
 
 

@@ -21,6 +21,7 @@ class Settings:
     max_optimization_iterations: int
     optimization_candidates_per_round: int
     optimization_history: str
+    optimization_prompt_token_budget: int | None
     default_scenario: str
 
     @classmethod
@@ -38,6 +39,7 @@ class Settings:
             max_optimization_iterations=int(os.getenv("MAX_OPTIMIZATION_ITERATIONS", "3")),
             optimization_candidates_per_round=int(os.getenv("OPTIMIZATION_CANDIDATES_PER_ROUND", "4")),
             optimization_history=os.getenv("OPTIMIZATION_HISTORY", "full").strip().lower(),
+            optimization_prompt_token_budget=int(budget) if (budget := os.getenv("OPTIMIZATION_PROMPT_TOKEN_BUDGET", "").strip()) else None,
             default_scenario=os.getenv("DEFAULT_SCENARIO", "urban_area"),
         )
 

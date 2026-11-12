@@ -11,6 +11,7 @@ from agentic_ibn.agents.optimization_agent import (
     HeuristicCandidateGenerator,
     OptimizationLoop,
     ProposalRequest,
+    fit_archive_view,
     round_roles,
 )
 from agentic_ibn.optimization.archive import (
@@ -181,6 +182,8 @@ def test_agno_generator_sends_archive_and_roles(surrogate, baseline, maintenance
 
     generator = AgnoCandidateGenerator.__new__(AgnoCandidateGenerator)
     generator.agent = FakeAgent()
+    generator.prompt_token_budget = None
+    generator.call_log = []
     request = ProposalRequest(
         intent=maintenance_intent,
         baseline=baseline,
@@ -196,7 +199,25 @@ def test_agno_generator_sends_archive_and_roles(surrogate, baseline, maintenance
     assert generator.propose_batch(request)[0].role == "learn"
     text = sent[0]
     assert "Round 2 of 3 (exploit)" in text and "learn, combine" in text and "- free" not in text
-    assert '"tried_candidates_worst_to_best"' in text and '"choices": [' in text
+    assert '"tried_candidates_worst_to_best"' in text and '"choices":[' in text
+    assert len(generator.call_log) == 1 and "seconds" in generator.call_log[0]
+
+
+def test_prompt_budget_drops_worst_rows_first():
+    view = {
+        "baseline": {"id": 0},
+        "tried_candidates_worst_to_best": [{"id": i, "pad": "x" * 400} for i in range(1, 9)],
+        "rejected_candidates": [{"id": 99, "pad": "y" * 400}],
+        "best_candidate_id": 8,
+        "evaluated_count": 8,
+    }
+    assert fit_archive_view(view, fixed_tokens=0, budget=None) is view
+    fitted = fit_archive_view(view, fixed_tokens=200, budget=600)
+    assert fitted["rejected_candidates"] == []
+    assert [row["id"] for row in fitted["tried_candidates_worst_to_best"]] == [6, 7, 8]
+    assert fitted["rows_omitted_for_prompt_budget"] == 6
+    tiny = fit_archive_view(view, fixed_tokens=10_000, budget=600)
+    assert [row["id"] for row in tiny["tried_candidates_worst_to_best"]] == [8]
 
 
 def test_exhaustive_benchmark_finds_at_least_the_loop_best(surrogate, baseline, maintenance_intent):

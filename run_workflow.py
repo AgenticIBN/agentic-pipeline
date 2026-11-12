@@ -29,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="'full' shows the whole archive to the agent; 'last' only the latest candidate (ablation)",
     )
     parser.add_argument(
+        "--prompt-token-budget",
+        type=int,
+        default=None,
+        help="Cap on the estimated tokens sent to the Optimization Agent; worst archive rows are dropped first",
+    )
+    parser.add_argument(
         "--parsed-intent-file",
         default=None,
         help="Optional ParsedIntent JSON. Required for deterministic runtime; bypasses the LLM parser.",
@@ -83,6 +89,7 @@ def main() -> None:
         max_iterations=args.max_iterations or settings.max_optimization_iterations,
         candidates_per_round=args.candidates_per_round or settings.optimization_candidates_per_round,
         optimization_history=args.optimization_history or settings.optimization_history,
+        prompt_token_budget=args.prompt_token_budget or settings.optimization_prompt_token_budget,
     )
     result = workflow.run(
         intent_text=args.intent,
